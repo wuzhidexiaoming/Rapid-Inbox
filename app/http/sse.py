@@ -6,6 +6,9 @@ from typing import Any
 from app.db.connection import connect_database
 
 
+LIVE_SSE_EVENT_TYPES: tuple[str, ...] = ("rcpt_accepted", "rcpt_rejected", "queued")
+
+
 def encode_sse(event: dict[str, object]) -> str:
     return f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 

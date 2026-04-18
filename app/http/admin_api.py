@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 from app.auth.permissions import PermissionContext
-from app.http.sse import encode_sse, recent_smtp_sessions, smtp_live_snapshot
+from app.http.sse import LIVE_SSE_EVENT_TYPES, encode_sse, recent_smtp_sessions, smtp_live_snapshot
 from app.ingest.storage import utc_now
 from app.services.dns_check import DnsCheckService
 
@@ -162,6 +162,7 @@ async def live_page(request: Request) -> Response:
             "events": smtp_live_snapshot(runtime),
             "sessions": recent_smtp_sessions(runtime),
             "stream_url": "/api/v1/admin/live/smtp/stream",
+            "live_event_types": LIVE_SSE_EVENT_TYPES,
         },
     )
 

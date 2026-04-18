@@ -164,6 +164,40 @@ class RapidInboxRuntime:
         self.storage.write_manifest(message_id, received_at, manifest_payload)
 
         def operation(connection: sqlite3.Connection) -> list[str]:
+            if smtp_session_id is not None:
+                session_exists = connection.execute(
+                    "SELECT 1 FROM smtp_sessions WHERE id = ?",
+                    (smtp_session_id,),
+                ).fetchone()
+                if session_exists is None:
+                    connection.execute(
+                        """
+                        INSERT INTO smtp_sessions (
+                            id,
+                            remote_ip,
+                            remote_port,
+                            helo_name,
+                            status,
+                            tls_used,
+                            connect_at,
+                            first_command_at,
+                            last_command_at,
+                            last_rcpt_to_sample
+                        ) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            smtp_session_id,
+                            "unknown",
+                            None,
+                            None,
+                            0,
+                            received_at,
+                            received_at,
+                            received_at,
+                            None,
+                        ),
+                    )
+
             connection.execute(
                 """
                 INSERT INTO messages (

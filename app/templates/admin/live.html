@@ -152,7 +152,8 @@
         status.textContent = "Connected";
       }
 
-      ["connected", "ehlo", "mail_from", "rcpt_accepted", "rcpt_rejected", "queued", "data_begin", "data_accepted", "quit", "error"].forEach((type) => {
+      const eventTypes = {{ live_event_types | tojson }};
+      eventTypes.forEach((type) => {
         source.addEventListener(type, (event) => {
           try {
             appendEvent(JSON.parse(event.data));

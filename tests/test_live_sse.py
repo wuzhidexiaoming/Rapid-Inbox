@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 
 @pytest.mark.asyncio
 async def test_live_sse_stream_emits_recent_rcpt_event(admin_client, runtime, sample_email_bytes: bytes) -> None:
     await runtime.create_domain("adb.com")
-    await runtime.ensure_smtp_session(
-        "smtp_live_1",
-        SimpleNamespace(peer=("127.0.0.1", 2525), host_name="pytest", ssl=None),
-    )
     await runtime.accept_message(
         rcpt_tos=["foo@adb.com"],
         envelope_from="sender@example.com",
