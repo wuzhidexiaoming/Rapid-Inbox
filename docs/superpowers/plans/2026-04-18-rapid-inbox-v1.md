@@ -159,28 +159,28 @@ class SeededMessage:
 
 
 @pytest.fixture
-async def runtime(tmp_path) -> AsyncIterator[RapidInboxRuntime]:
+async def app_fixture(tmp_path) -> AsyncIterator[tuple[FastAPI, RapidInboxRuntime]]:
     settings = Settings(
         storage_root=tmp_path / "storage",
         database_path=tmp_path / "storage" / "app.db",
-        bootstrap_admin_username="admin",
-        bootstrap_admin_password="change-me-now",
     )
-    value = RapidInboxRuntime(settings)
-    await value.start()
-    try:
-        yield value
-    finally:
-        await value.stop()
+    app = create_app(settings=settings)
+    async with app.router.lifespan_context(app):
+        yield app, app.state.runtime
 ```
 
 - [ ] **Step 4: Add the shared app client fixture**
 
 ```python
 @pytest.fixture
-async def app_client(runtime: RapidInboxRuntime) -> AsyncIterator[httpx.AsyncClient]:
-    app = create_app(settings=runtime.settings)
-    app.state.runtime = runtime
+async def runtime(app_fixture) -> RapidInboxRuntime:
+    _, runtime = app_fixture
+    return runtime
+
+
+@pytest.fixture
+async def app_client(app_fixture) -> AsyncIterator[httpx.AsyncClient]:
+    app, _ = app_fixture
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
