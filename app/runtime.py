@@ -533,6 +533,7 @@ class RapidInboxRuntime:
             """
             SELECT
                 COUNT(*) AS message_count,
+                MIN(delivered_at) AS first_seen_at,
                 MAX(delivered_at) AS latest_message_at
             FROM message_deliveries
             WHERE mailbox_id = ? AND status = 'active'
@@ -542,11 +543,19 @@ class RapidInboxRuntime:
         connection.execute(
             """
             UPDATE mailboxes
-            SET message_count = ?,
-                latest_message_at = ?
+            SET first_seen_at = ?,
+                last_seen_at = ?,
+                latest_message_at = ?,
+                message_count = ?
             WHERE id = ?
             """,
-            (int(summary["message_count"]), summary["latest_message_at"], mailbox_id),
+            (
+                summary["first_seen_at"],
+                summary["latest_message_at"],
+                summary["latest_message_at"],
+                int(summary["message_count"]),
+                mailbox_id,
+            ),
         )
 
     def _insert_mailbox(
