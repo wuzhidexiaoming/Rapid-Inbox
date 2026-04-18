@@ -71,11 +71,51 @@ async def app_client(app_fixture) -> AsyncIterator[httpx.AsyncClient]:
         yield client
 
 
+@pytest_asyncio.fixture
+async def admin_client(app_client: httpx.AsyncClient, runtime: RapidInboxRuntime) -> httpx.AsyncClient:
+    key = await runtime.api_keys.create_key(
+        name="fixture-admin",
+        kind="admin",
+        scopes=["domains.write", "messages.write", "audit.read", "system.write", "live.read"],
+        domain_ids=[],
+        mailbox_patterns=[],
+    )
+    app_client.headers["X-API-Key"] = key["plain_text"]
+    return app_client
+
+
+@pytest_asyncio.fixture
+async def seeded_message(runtime: RapidInboxRuntime, sample_email_bytes: bytes) -> SeededMessage:
+    await runtime.create_domain("adb.com")
+    key = await runtime.api_keys.create_key(
+        name="fixture-public",
+        kind="public",
+        scopes=["public.read"],
+        domain_ids=[],
+        mailbox_patterns=[],
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=sample_email_bytes,
+        smtp_session_id="smtp_fixture_1",
+    )
+    await runtime.drain_parser_queue()
+    mailbox = await runtime.get_mailbox_view("foo@adb.com")
+    return SeededMessage(
+        message_id=mailbox["items"][0]["message_id"],
+        delivery_id=mailbox["items"][0]["delivery_id"],
+        public_api_key=key["plain_text"],
+    )
+
+
 __all__ = [
+    "admin_client",
     "SeededMessage",
     "app_client",
     "app_fixture",
     "connect_database",
+    "seeded_message",
     "runtime",
     "sample_email_bytes",
 ]

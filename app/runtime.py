@@ -7,6 +7,8 @@ from typing import Any
 from time import time_ns
 
 from app.auth import AuthService
+from app.auth.api_keys import ApiKeyService, get_active_permission_context
+from app.auth.permissions import ensure_mailbox_access
 from app.config import Settings
 from app.db.connection import connect_database, initialize_database
 from app.db.writer import DatabaseWriter
@@ -22,9 +24,11 @@ from app.smtp.matcher import DomainMatcher, DomainRule
 class RapidInboxRuntime:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self._legacy_public_api_key = settings.public_api_key
         self.storage = FileStorage(settings)
         self.writer = DatabaseWriter(settings.database_path)
         self.auth = AuthService(settings, self.writer)
+        self.api_keys = ApiKeyService(settings.database_path, self.writer)
         self.domains = DomainService(settings.database_path, self.writer)
         self.parser = MessageParser(self.storage)
         self.parse_queue = ParseQueue(self._parse_message)
@@ -35,6 +39,8 @@ class RapidInboxRuntime:
         self.settings.ensure_directories()
         initialize_database(self.settings.database_path)
         await self.auth.ensure_bootstrap_admin()
+        # Swap the plain config token for a string-like proxy that can validate DB-backed keys too.
+        self.settings.public_api_key = self.api_keys.configure_legacy_public_api_key(self._legacy_public_api_key)
         await self.parse_queue.start()
         await self.recovery.run()
         self.domains.reload()
@@ -301,6 +307,7 @@ class RapidInboxRuntime:
         if match is None:
             raise LookupError("mailbox domain not managed")
 
+        await self._authorize_public_mailbox_access(mailbox_address, match.domain_id)
         await self._ensure_mailbox_exists(match)
         with connect_database(self.settings.database_path) as connection:
             mailbox = connection.execute(
@@ -341,6 +348,7 @@ class RapidInboxRuntime:
         if match is None:
             raise LookupError("mailbox domain not managed")
 
+        await self._authorize_public_mailbox_access(mailbox_address, match.domain_id)
         await self._ensure_mailbox_exists(match)
         with connect_database(self.settings.database_path) as connection:
             mailbox = connection.execute(
@@ -399,6 +407,13 @@ class RapidInboxRuntime:
             "headers": json.loads(row["headers_json"] or "[]"),
             "attachments": [dict(attachment) for attachment in attachments],
         }
+
+    async def _authorize_public_mailbox_access(self, mailbox_address: str, domain_id: int) -> None:
+        context = get_active_permission_context()
+        if context is None:
+            return
+        ensure_mailbox_access(context, mailbox_address, domain_id, "public.read")
+        await self.api_keys.record_usage(context)
 
     async def get_raw_message(self, delivery_id: str) -> bytes:
         with connect_database(self.settings.database_path) as connection:
