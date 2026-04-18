@@ -14,6 +14,7 @@ async def test_admin_login_and_dashboard_page_flow(app_client, runtime) -> None:
     assert response.status_code == 200
     assert "Rapid Inbox Admin" in response.text
     assert "Domains" in response.text
+    assert "/admin/live" not in response.text
 
 
 @pytest.mark.asyncio
@@ -22,6 +23,13 @@ async def test_admin_pages_redirect_unauthenticated_users_to_login(app_client) -
 
     assert response.status_code == 303
     assert response.headers["location"] == "/admin/login"
+
+
+@pytest.mark.asyncio
+async def test_admin_live_placeholder_route_is_not_exposed(app_client) -> None:
+    response = await app_client.get("/admin/live")
+
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

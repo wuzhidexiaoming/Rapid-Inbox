@@ -480,28 +480,3 @@ async def settings_page(request: Request) -> Response:
             "settings_items": settings_items,
         },
     )
-
-
-@router.get("/admin/live", response_class=HTMLResponse)
-async def live_page(request: Request) -> Response:
-    admin_or_response = await _require_admin(request)
-    if isinstance(admin_or_response, Response):
-        return admin_or_response
-
-    return _render(
-        request,
-        "admin/base.html",
-        {
-            "page_title": "Live",
-            "admin": admin_or_response,
-            "page_body": """
-                <section class=\"card\">
-                  <p class=\"eyebrow\">Live View</p>
-                  <h2>Placeholder only</h2>
-                  <p class=\"muted\">
-                    Real-time SMTP streaming is intentionally left for the next task.
-                  </p>
-                </section>
-            """,
-        },
-    )
