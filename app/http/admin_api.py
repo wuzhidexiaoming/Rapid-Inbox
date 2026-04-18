@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 
 from app.auth.permissions import PermissionContext
 
@@ -68,6 +68,28 @@ def _audit_actor_ref(admin: PermissionContext) -> str:
     return admin.public_id or "legacy-admin-token"
 
 
+async def _write_audit_best_effort(
+    request: Request,
+    admin: PermissionContext,
+    action: str,
+    resource_type: str,
+    resource_ref: str | None,
+    status_value: str,
+) -> None:
+    try:
+        await request.app.state.runtime.audit.log(
+            "api_key",
+            _audit_actor_ref(admin),
+            action,
+            resource_type,
+            resource_ref,
+            status_value,
+        )
+    except Exception:
+        # Mutation already completed; audit writes are best-effort here.
+        return
+
+
 @router.get("/api/v1/admin/domains")
 async def list_domains(
     request: Request,
@@ -106,14 +128,7 @@ async def create_domain(
         )
     except (ValueError, sqlite3.IntegrityError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    await runtime.audit.log(
-        "api_key",
-        _audit_actor_ref(admin),
-        "domains.create",
-        "domain",
-        str(created["id"]),
-        "success",
-    )
+    await _write_audit_best_effort(request, admin, "domains.create", "domain", str(created["id"]), "success")
     return created
 
 
@@ -129,14 +144,7 @@ async def reparse_message(
         await request.app.state.runtime.messages.reparse_message(message_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    await request.app.state.runtime.audit.log(
-        "api_key",
-        _audit_actor_ref(admin),
-        "messages.reparse",
-        "message",
-        message_id,
-        "success",
-    )
+    await _write_audit_best_effort(request, admin, "messages.reparse", "message", message_id, "success")
     return {"queued": True, "message_id": message_id}
 
 
@@ -144,8 +152,8 @@ async def reparse_message(
 async def list_audit_logs(
     request: Request,
     admin: PermissionContext = Depends(require_admin_key),
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=0, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
 ) -> dict:
     require_admin_scope(admin, "audit.read")
     await _record_admin_key_usage(request, admin)
@@ -174,12 +182,5 @@ async def update_settings(
         updated = await request.app.state.runtime.system_settings.update_settings(payload)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    await request.app.state.runtime.audit.log(
-        "api_key",
-        _audit_actor_ref(admin),
-        "settings.update",
-        "system_settings",
-        None,
-        "success",
-    )
+    await _write_audit_best_effort(request, admin, "settings.update", "system_settings", None, "success")
     return updated

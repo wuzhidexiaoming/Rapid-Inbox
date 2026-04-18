@@ -55,6 +55,37 @@ async def test_admin_api_supports_message_reparse_and_settings_update(admin_clie
 
 
 @pytest.mark.asyncio
+async def test_admin_api_mutation_succeeds_when_audit_logging_fails(admin_client, runtime) -> None:
+    async def failing_audit_log(*args, **kwargs):
+        raise RuntimeError("audit unavailable")
+
+    runtime.audit.log = failing_audit_log
+
+    response = await admin_client.patch(
+        "/api/v1/admin/settings",
+        json={"max_recipients_per_message": "33"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["max_recipients_per_message"] == 33
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "query_string",
+    [
+        "?limit=-1",
+        "?limit=1001",
+        "?offset=-1",
+    ],
+)
+async def test_admin_api_rejects_invalid_audit_pagination(admin_client, query_string: str) -> None:
+    response = await admin_client.get(f"/api/v1/admin/audit-logs{query_string}")
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_admin_api_rejects_invalid_domain_payload(admin_client) -> None:
     response = await admin_client.post(
         "/api/v1/admin/domains",
