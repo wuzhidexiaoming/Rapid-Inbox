@@ -20,22 +20,13 @@ class SettingsService:
         self._runtime = runtime
 
     def get_settings(self) -> dict[str, Any]:
-        settings = {
-            "max_message_size_bytes": int(self._runtime.settings.max_message_size_bytes),
-            **self.DEFAULTS,
-        }
-        with connect_database(self._runtime.settings.database_path) as connection:
-            rows = connection.execute(
-                """
-                SELECT key, value
-                FROM system_settings
-                ORDER BY key ASC
-                """
-            ).fetchall()
+        settings = self._base_settings()
+        settings.update(self._load_persisted_settings())
+        return settings
 
-        for row in rows:
-            key = str(row["key"])
-            settings[key] = self._deserialize_value(key, row["value"])
+    async def load_persisted_settings(self) -> dict[str, Any]:
+        settings = self._load_persisted_settings()
+        self._runtime.apply_live_settings(settings)
         return settings
 
     async def update_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -66,6 +57,28 @@ class SettingsService:
             {key: self._deserialize_value(key, value) for key, value in normalized.items()}
         )
         return self.get_settings()
+
+    def _base_settings(self) -> dict[str, Any]:
+        return {
+            "max_message_size_bytes": int(self._runtime.settings.max_message_size_bytes),
+            **self.DEFAULTS,
+        }
+
+    def _load_persisted_settings(self) -> dict[str, Any]:
+        with connect_database(self._runtime.settings.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT key, value
+                FROM system_settings
+                ORDER BY key ASC
+                """
+            ).fetchall()
+
+        settings: dict[str, Any] = {}
+        for row in rows:
+            key = str(row["key"])
+            settings[key] = self._deserialize_value(key, row["value"])
+        return settings
 
     def _normalize_payload(self, payload: dict[str, Any]) -> dict[str, str]:
         normalized: dict[str, str] = {}

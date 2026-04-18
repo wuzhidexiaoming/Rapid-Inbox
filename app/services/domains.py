@@ -125,7 +125,7 @@ class DomainService:
                 ORDER BY root_domain_ascii ASC
                 """
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._normalize_domain_row(row) for row in rows]
 
     def get_domain(self, domain_id: int) -> dict[str, Any]:
         with connect_database(self._database_path) as connection:
@@ -158,7 +158,22 @@ class DomainService:
             ).fetchone()
         if row is None:
             raise LookupError("domain not found")
-        return dict(row)
+        return self._normalize_domain_row(row)
 
     def match_address(self, address: str) -> DomainMatch | None:
         return self._matcher.match_address(address)
+
+    def _normalize_domain_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        payload = dict(row)
+        for key in (
+            "accept_exact",
+            "accept_subdomains",
+            "public_web_enabled",
+            "public_api_enabled",
+            "is_active",
+            "is_hidden",
+            "local_part_case_sensitive",
+        ):
+            if key in payload:
+                payload[key] = bool(payload[key])
+        return payload

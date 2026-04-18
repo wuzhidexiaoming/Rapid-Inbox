@@ -74,9 +74,37 @@ async def test_admin_api_read_endpoints_accept_read_scopes(admin_client, runtime
     )
 
     assert domains_response.status_code == 200
-    assert domains_response.json()["items"][0]["root_domain_ascii"] == "adb.com"
+    domain = domains_response.json()["items"][0]
+    assert domain["root_domain_ascii"] == "adb.com"
+    assert isinstance(domain["accept_exact"], bool)
+    assert isinstance(domain["public_web_enabled"], bool)
+    assert isinstance(domain["is_active"], bool)
     assert settings_response.status_code == 200
     assert settings_response.json()["max_message_size_bytes"] == runtime.settings.max_message_size_bytes
+
+
+@pytest.mark.asyncio
+async def test_admin_mailbox_service_normalizes_boolean_flags(runtime, sample_email_bytes) -> None:
+    await runtime.create_domain("adb.com")
+    await runtime.ensure_smtp_session(
+        "smtp_mailbox_booleans",
+        SimpleNamespace(peer=("127.0.0.1", 2525), host_name="pytest", ssl=None),
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=sample_email_bytes,
+        smtp_session_id="smtp_mailbox_booleans",
+    )
+    await runtime.drain_parser_queue()
+
+    mailbox = runtime.mailboxes.list_mailboxes()["items"][0]
+
+    assert mailbox["address_canonical"] == "foo@adb.com"
+    assert isinstance(mailbox["public_enabled"], bool)
+    assert isinstance(mailbox["is_hidden"], bool)
+    assert mailbox["public_enabled"] is True
+    assert mailbox["is_hidden"] is False
 
 
 @pytest.mark.asyncio
@@ -111,3 +139,54 @@ async def test_admin_api_settings_update_applies_live_message_size_limit(admin_c
     assert settings_response.status_code == 200
     assert runtime.settings.max_message_size_bytes == 100
     assert accepted.startswith("250 queued as ")
+
+
+@pytest.mark.asyncio
+async def test_admin_api_settings_reload_from_database_on_restart(tmp_path) -> None:
+    storage_root = tmp_path / "storage"
+    database_path = storage_root / "app.db"
+    settings = Settings(
+        storage_root=storage_root,
+        database_path=database_path,
+    )
+    app = create_app(settings=settings)
+
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            admin_key = await app.state.runtime.api_keys.create_key(
+                name="restart-admin",
+                kind="admin",
+                scopes=["system.write"],
+                domain_ids=[],
+                mailbox_patterns=[],
+            )
+            response = await client.patch(
+                "/api/v1/admin/settings",
+                headers={"X-API-Key": admin_key["plain_text"]},
+                json={"max_message_size_bytes": "10"},
+            )
+
+        assert response.status_code == 200
+
+    restarted_settings = Settings(
+        storage_root=storage_root,
+        database_path=database_path,
+    )
+    restarted_app = create_app(settings=restarted_settings)
+
+    async with restarted_app.router.lifespan_context(restarted_app):
+        assert restarted_app.state.runtime.settings.max_message_size_bytes == 10
+        await restarted_app.state.runtime.create_domain("adb.com")
+        handler = RapidInboxHandler(restarted_app.state.runtime)
+        session = SimpleNamespace(peer=("127.0.0.1", 2525), host_name="pytest", ssl=None)
+        envelope = SimpleNamespace(
+            rcpt_tos=[],
+            mail_from="sender@example.com",
+            content=b"01234567890",
+        )
+
+        await handler.handle_RCPT(None, session, envelope, "foo@adb.com", [])
+        result = await handler.handle_DATA(None, session, envelope)
+
+        assert result == "552 message too large"

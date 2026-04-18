@@ -47,6 +47,7 @@ class RapidInboxRuntime:
         self.settings.ensure_directories()
         initialize_database(self.settings.database_path)
         await self.auth.ensure_bootstrap_admin()
+        await self.system_settings.load_persisted_settings()
         # Swap the plain config token for a string-like proxy that can validate DB-backed keys too.
         self.settings.public_api_key = self.api_keys.configure_legacy_public_api_key(self._legacy_public_api_key)
         await self.parse_queue.start()
@@ -72,8 +73,9 @@ class RapidInboxRuntime:
         return await self.system_settings.update_settings(payload)
 
     def apply_live_settings(self, updates: dict[str, Any]) -> None:
-        if "max_message_size_bytes" in updates:
-            self.settings.max_message_size_bytes = int(updates["max_message_size_bytes"])
+        for key, value in updates.items():
+            if hasattr(self.settings, key):
+                setattr(self.settings, key, value)
 
     def list_audit_logs(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
         return self.audit.list_logs(limit=limit, offset=offset)

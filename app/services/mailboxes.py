@@ -36,7 +36,7 @@ class MailboxService:
                 """,
                 (limit, offset),
             ).fetchall()
-        return {"items": [dict(row) for row in rows]}
+        return {"items": [self._normalize_mailbox_row(row) for row in rows]}
 
     def get_mailbox(self, mailbox_id: int) -> dict[str, Any]:
         with connect_database(self._runtime.settings.database_path) as connection:
@@ -65,7 +65,7 @@ class MailboxService:
             ).fetchone()
         if row is None:
             raise LookupError("mailbox not found")
-        return dict(row)
+        return self._normalize_mailbox_row(row)
 
     async def update_mailbox(self, mailbox_id: int, payload: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(payload, dict):
@@ -100,6 +100,13 @@ class MailboxService:
 
         await self._runtime.writer.execute(operation)
         return self.get_mailbox(mailbox_id)
+
+    def _normalize_mailbox_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        payload = dict(row)
+        for key in ("public_enabled", "is_hidden"):
+            if key in payload:
+                payload[key] = bool(payload[key])
+        return payload
 
 
 __all__ = ["MailboxService"]
