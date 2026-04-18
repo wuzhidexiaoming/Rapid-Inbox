@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from pathlib import Path
 from typing import Any
 from time import time_ns
 
+from app.auth import AuthService
 from app.config import Settings
 from app.db.connection import connect_database, initialize_database
 from app.db.writer import DatabaseWriter
@@ -24,6 +24,7 @@ class RapidInboxRuntime:
         self.settings = settings
         self.storage = FileStorage(settings)
         self.writer = DatabaseWriter(settings.database_path)
+        self.auth = AuthService(settings, self.writer)
         self.domains = DomainService(settings.database_path, self.writer)
         self.parser = MessageParser(self.storage)
         self.parse_queue = ParseQueue(self._parse_message)
@@ -33,6 +34,7 @@ class RapidInboxRuntime:
     async def start(self) -> None:
         self.settings.ensure_directories()
         initialize_database(self.settings.database_path)
+        await self.auth.ensure_bootstrap_admin()
         await self.parse_queue.start()
         await self.recovery.run()
         self.domains.reload()

@@ -1,13 +1,22 @@
 from __future__ import annotations
 
+import secrets
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
+
+
+def _default_bootstrap_admin_password() -> str:
+    return secrets.token_urlsafe(24)
 
 
 @dataclass(slots=True)
 class Settings:
     storage_root: Path
     database_path: Path
+    bootstrap_admin_username: str = "admin"
+    bootstrap_admin_password: str = field(default_factory=_default_bootstrap_admin_password)
+    session_cookie_name: str = "rapid_inbox_session"
     host: str = "127.0.0.1"
     port: int = 8000
     smtp_host: str = "127.0.0.1"
