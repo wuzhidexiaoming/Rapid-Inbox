@@ -260,3 +260,70 @@ async def test_recovery_scanner_requeues_failed_message_on_startup(
 
     assert row["parse_status"] == "parsed"
     assert row["parse_error"] is None
+
+
+@pytest.mark.asyncio
+async def test_recovery_scanner_recreates_deleted_domain_from_manifest_metadata(
+    tmp_path,
+    sample_email_bytes: bytes,
+) -> None:
+    settings = Settings(
+        storage_root=tmp_path / "storage",
+        database_path=tmp_path / "storage" / "app.db",
+    )
+    runtime = RapidInboxRuntime(settings)
+
+    await runtime.start()
+    try:
+        await runtime.create_domain("adb.com")
+        response = await runtime.accept_message(
+            rcpt_tos=["foo@adb.com"],
+            envelope_from="sender@example.com",
+            content=sample_email_bytes,
+        )
+        await runtime.drain_parser_queue()
+    finally:
+        await runtime.stop()
+
+    message_id = response.removeprefix("250 queued as ")
+    with connect_database(settings.database_path) as connection:
+        connection.execute("DELETE FROM message_deliveries")
+        connection.execute("DELETE FROM messages")
+        connection.execute("DELETE FROM mailboxes")
+        connection.execute("DELETE FROM domains WHERE root_domain_ascii = ?", ("adb.com",))
+        connection.commit()
+
+    repaired = RapidInboxRuntime(settings)
+    await repaired.start()
+    try:
+        mailbox = await repaired.get_mailbox_view("foo@adb.com")
+        await repaired.drain_parser_queue()
+        mailbox_after_parse = await repaired.get_mailbox_view("foo@adb.com")
+
+        assert mailbox["message_count"] == 1
+        assert mailbox["items"][0]["message_id"] == message_id
+        assert mailbox_after_parse["items"][0]["parse_status"] == "parsed"
+    finally:
+        await repaired.stop()
+
+    with connect_database(settings.database_path) as connection:
+        domain = connection.execute(
+            """
+            SELECT id, root_domain_ascii, is_active
+            FROM domains
+            WHERE root_domain_ascii = ?
+            """,
+            ("adb.com",),
+        ).fetchone()
+        delivery = connection.execute(
+            """
+            SELECT d.message_id, d.rcpt_to
+            FROM message_deliveries AS d
+            WHERE d.message_id = ?
+            """,
+            (message_id,),
+        ).fetchone()
+
+    assert domain["root_domain_ascii"] == "adb.com"
+    assert domain["is_active"] == 1
+    assert delivery["rcpt_to"] == "foo@adb.com"

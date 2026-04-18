@@ -32,9 +32,9 @@ class RapidInboxRuntime:
     async def start(self) -> None:
         self.settings.ensure_directories()
         initialize_database(self.settings.database_path)
-        self.domains.reload()
         await self.parse_queue.start()
         await self.recovery.run()
+        self.domains.reload()
 
     async def stop(self) -> None:
         await self.parse_queue.stop()
@@ -178,6 +178,42 @@ class RapidInboxRuntime:
 
     async def recover_from_manifest(self, manifest: dict[str, Any]) -> None:
         await self.writer.execute(lambda connection: self._apply_recovery_manifest(connection, manifest))
+
+    def validate_recovery_manifest(self, manifest: Any) -> None:
+        if not isinstance(manifest, dict):
+            raise ValueError("invalid recovery manifest")
+
+        for key in ("message_id", "received_at", "raw_path", "raw_sha256", "raw_size_bytes"):
+            if key not in manifest:
+                raise ValueError("invalid recovery manifest")
+
+        if not all(isinstance(manifest[key], str) for key in ("message_id", "received_at", "raw_path", "raw_sha256")):
+            raise ValueError("invalid recovery manifest")
+        raw_size_bytes = manifest["raw_size_bytes"]
+        if not isinstance(raw_size_bytes, int) or isinstance(raw_size_bytes, bool):
+            raise ValueError("invalid recovery manifest")
+
+        recipients = manifest.get("recipients")
+        if recipients is not None:
+            if not isinstance(recipients, list) or not recipients:
+                raise ValueError("invalid recovery manifest")
+            for recipient in recipients:
+                if not isinstance(recipient, dict):
+                    raise ValueError("invalid recovery manifest")
+                if not isinstance(recipient.get("rcpt_to"), str):
+                    raise ValueError("invalid recovery manifest")
+                if not isinstance(recipient.get("domain_id"), int) or isinstance(recipient.get("domain_id"), bool):
+                    raise ValueError("invalid recovery manifest")
+                for key in ("domain_ascii", "root_domain_ascii", "local_part_canonical", "address_canonical"):
+                    if not isinstance(recipient.get(key), str):
+                        raise ValueError("invalid recovery manifest")
+        else:
+            rcpt_tos = manifest.get("rcpt_tos")
+            if not isinstance(rcpt_tos, list) or not rcpt_tos:
+                raise ValueError("invalid recovery manifest")
+            for rcpt_to in rcpt_tos:
+                if not isinstance(rcpt_to, str):
+                    raise ValueError("invalid recovery manifest")
 
     async def find_messages_for_reparse(self) -> list[str]:
         with connect_database(self.settings.database_path) as connection:
@@ -668,6 +704,7 @@ class RapidInboxRuntime:
         recipient: dict[str, Any],
         received_at: str,
     ) -> int:
+        domain_id = self._ensure_recovery_domain_record(connection, recipient, received_at)
         existing = connection.execute(
             "SELECT id FROM mailboxes WHERE address_canonical = ?",
             (recipient["address_canonical"],),
@@ -677,7 +714,7 @@ class RapidInboxRuntime:
 
         cursor = self._insert_mailbox_from_values(
             connection,
-            domain_id=int(recipient["domain_id"]),
+            domain_id=domain_id,
             local_part_canonical=str(recipient["local_part_canonical"]),
             rcpt_domain_ascii=str(recipient["domain_ascii"]),
             address_canonical=str(recipient["address_canonical"]),
@@ -687,6 +724,64 @@ class RapidInboxRuntime:
             latest_message_at=None,
         )
         return int(cursor.lastrowid)
+
+    def _ensure_recovery_domain_record(
+        self,
+        connection: sqlite3.Connection,
+        recipient: dict[str, Any],
+        received_at: str,
+    ) -> int:
+        root_domain_ascii = str(recipient["root_domain_ascii"])
+        existing = connection.execute(
+            "SELECT id FROM domains WHERE root_domain_ascii = ?",
+            (root_domain_ascii,),
+        ).fetchone()
+        if existing is not None:
+            return int(existing["id"])
+
+        domain_id = int(recipient["domain_id"])
+        existing = connection.execute(
+            "SELECT id FROM domains WHERE id = ?",
+            (domain_id,),
+        ).fetchone()
+        if existing is not None:
+            return int(existing["id"])
+
+        connection.execute(
+            """
+            INSERT INTO domains (
+                id,
+                root_domain_ascii,
+                root_domain_unicode,
+                accept_exact,
+                accept_subdomains,
+                public_web_enabled,
+                public_api_enabled,
+                is_active,
+                is_hidden,
+                local_part_case_sensitive,
+                plus_addressing_mode,
+                max_message_size_bytes,
+                retention_days,
+                dns_status,
+                dns_last_checked_at,
+                dns_details_json,
+                notes,
+                created_by_admin_id,
+                updated_by_admin_id,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, 1, 1, 1, 1, 1, 0, 0, 'keep', 52428800, NULL, 'unknown', NULL, NULL, NULL, NULL, NULL, ?, ?)
+            """,
+            (
+                domain_id,
+                root_domain_ascii,
+                root_domain_ascii,
+                received_at,
+                received_at,
+            ),
+        )
+        return domain_id
 
     def _insert_mailbox_from_values(
         self,
