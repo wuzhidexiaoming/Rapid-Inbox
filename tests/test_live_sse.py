@@ -87,6 +87,7 @@ async def test_live_sse_stream_emits_recent_rcpt_event(runtime, sample_email_byt
         await stream.aclose()
 
     assert "rcpt_accepted" in event or "queued" in event
+    assert "id:" in event
 
 
 @pytest.mark.asyncio
@@ -120,6 +121,7 @@ async def test_live_sse_stream_skips_initial_history_after_cursor(runtime, sampl
 
     assert '"session_id": "smtp_live_2"' in follow_up
     assert '"type": "queued"' in follow_up
+    assert "id:" in follow_up
 
 
 @pytest.mark.asyncio
@@ -141,3 +143,40 @@ async def test_live_sse_stream_falls_back_to_initial_history_for_stale_generatio
         await stream.aclose()
 
     assert "rcpt_accepted" in event or "queued" in event
+    assert "id:" in event
+
+
+@pytest.mark.asyncio
+async def test_live_sse_stream_prefers_last_event_id_over_after_cursor(runtime) -> None:
+    await runtime.create_domain("adb.com")
+    await runtime.live_state.publish(
+        {"type": "queued", "session_id": "smtp_live_1", "ts": "2026-04-18T20:00:00Z"}
+    )
+
+    generation = runtime.live_state.generation
+    stream = stream_smtp_live_events(
+        runtime,
+        after_cursor=f"{generation}:0",
+        last_event_id=f"{generation}:1",
+        poll_interval=0.01,
+    )
+    pending_event: asyncio.Task[str] | None = None
+    try:
+        pending_event = asyncio.create_task(anext(stream))
+        await asyncio.sleep(0.05)
+        assert not pending_event.done()
+
+        await runtime.live_state.publish(
+            {"type": "queued", "session_id": "smtp_live_2", "ts": "2026-04-18T20:00:01Z"}
+        )
+        follow_up = await asyncio.wait_for(pending_event, timeout=0.2)
+    finally:
+        if pending_event is not None and not pending_event.done():
+            pending_event.cancel()
+            with suppress(asyncio.CancelledError):
+                await pending_event
+        await stream.aclose()
+
+    assert '"session_id": "smtp_live_2"' in follow_up
+    assert '"session_id": "smtp_live_1"' not in follow_up
+    assert "id:" in follow_up

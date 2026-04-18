@@ -11,8 +11,13 @@ from app.db.connection import connect_database
 LIVE_SSE_EVENT_TYPES: tuple[str, ...] = ("rcpt_accepted", "rcpt_rejected", "queued")
 
 
-def encode_sse(event: dict[str, object]) -> str:
-    return f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+def encode_sse(event: dict[str, object], *, event_id: str | None = None) -> str:
+    lines: list[str] = []
+    if event_id is not None:
+        lines.append(f"id: {event_id}")
+    lines.append(f"event: {event['type']}")
+    lines.append(f"data: {json.dumps(event, ensure_ascii=False)}")
+    return "\n".join(lines) + "\n\n"
 
 
 def smtp_live_snapshot(runtime, *, history_limit: int = 25) -> list[dict[str, Any]]:
@@ -32,8 +37,6 @@ def _parse_live_cursor(cursor: str | None) -> tuple[str, int] | None:
         seq = int(seq_text)
     except (AttributeError, ValueError):
         return None
-    if seq < 0:
-        return None
     return generation, seq
 
 
@@ -43,28 +46,42 @@ async def stream_smtp_live_events(
     poll_interval: float = 0.25,
     history_limit: int = 25,
     after_cursor: str | None = None,
+    last_event_id: str | None = None,
 ) -> AsyncIterator[str]:
     live_state = runtime.live_state
-    parsed_cursor = _parse_live_cursor(after_cursor)
+    resume_cursor = last_event_id if last_event_id is not None else after_cursor
+    parsed_cursor = _parse_live_cursor(resume_cursor)
     generation_matches = parsed_cursor is not None and parsed_cursor[0] == live_state.generation
 
     if generation_matches:
-        last_seq = parsed_cursor[1]
+        last_seq = max(parsed_cursor[1], 0)
+        replay_initial = False
     else:
+        replay_initial = True
+        last_seq = 0
+
+    if replay_initial:
         events, cursor = live_state.snapshot_state()
-        if not events:
-            events = _recent_message_events(runtime, limit=history_limit)
-        for event in events:
-            yield encode_sse(event)
-        parsed_snapshot_cursor = _parse_live_cursor(cursor)
-        last_seq = parsed_snapshot_cursor[1] if parsed_snapshot_cursor is not None else 0
+        if events:
+            for event in events:
+                seq = int(event.get("seq", 0))
+                yield encode_sse(event, event_id=f"{live_state.generation}:{seq}")
+            parsed_snapshot_cursor = _parse_live_cursor(cursor)
+            last_seq = parsed_snapshot_cursor[1] if parsed_snapshot_cursor is not None else 0
+        else:
+            history_events = _recent_message_events(runtime, limit=history_limit)
+            history_count = len(history_events)
+            for index, event in enumerate(history_events):
+                history_seq = -(history_count - index)
+                yield encode_sse(event, event_id=f"{live_state.generation}:{history_seq}")
+            last_seq = 0
 
     while True:
         new_events = live_state.snapshot_since(last_seq)
         if new_events:
             last_seq = int(new_events[-1].get("seq", last_seq))
             for event in new_events:
-                yield encode_sse(event)
+                yield encode_sse(event, event_id=f"{live_state.generation}:{event['seq']}")
             continue
         await asyncio.sleep(poll_interval)
 

@@ -173,9 +173,14 @@ async def smtp_stream(
     request: Request,
     _admin: PermissionContext = Depends(require_admin_live_access),
     after_cursor: str | None = Query(default=None),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ) -> StreamingResponse:
     return StreamingResponse(
-        stream_smtp_live_events(request.app.state.runtime, after_cursor=after_cursor),
+        stream_smtp_live_events(
+            request.app.state.runtime,
+            after_cursor=after_cursor,
+            last_event_id=last_event_id,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
