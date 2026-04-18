@@ -22,6 +22,10 @@ dev = [
   "pytest-asyncio>=0.24.0",
 ]
 
+[project.scripts]
+rapid-inbox-http = "app.http_runner:main"
+rapid-inbox-smtp = "app.smtp_runner:main"
+
 [tool.setuptools.packages.find]
 include = ["app*"]
 

@@ -8,9 +8,6 @@ from app.ingest.storage import utc_now
 
 
 class SettingsService:
-    DEFAULTS: dict[str, Any] = {
-        "max_recipients_per_message": 20,
-    }
     SUPPORTED_SETTINGS = {
         "max_message_size_bytes",
         "max_recipients_per_message",
@@ -63,7 +60,7 @@ class SettingsService:
     def _base_settings(self) -> dict[str, Any]:
         return {
             "max_message_size_bytes": int(self._runtime.settings.max_message_size_bytes),
-            **self.DEFAULTS,
+            "max_recipients_per_message": int(self._runtime.settings.max_recipients_per_message),
         }
 
     def _load_persisted_settings(self) -> dict[str, Any]:
@@ -126,8 +123,8 @@ class SettingsService:
             try:
                 return self._coerce_positive_int(key, value)
             except ValueError:
-                if key in self.DEFAULTS:
-                    return self.DEFAULTS[key]
+                if key == "max_recipients_per_message":
+                    return int(self._runtime.settings.max_recipients_per_message)
                 return int(self._runtime.settings.max_message_size_bytes)
         return value
 
