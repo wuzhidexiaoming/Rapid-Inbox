@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ subject or "(no subject)" }} - Rapid Inbox</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+      }
+
+      iframe {
+        width: 100%;
+        min-height: 30rem;
+        border: 1px solid #d0d7de;
+        border-radius: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>{{ subject or "(no subject)" }}</h1>
+    <p>{{ from_addr or "unknown" }}</p>
+    <p>{{ received_at }}</p>
+    <p>
+      <a href="/mail/{{ mailbox }}/{{ delivery_id }}/raw">Download raw message</a>
+    </p>
+    {% if text_body %}
+      <pre>{{ text_body }}</pre>
+    {% endif %}
+    {% if html_body %}
+      <section>
+        <h2>HTML preview</h2>
+        <iframe
+          src="/mail/{{ mailbox }}/{{ delivery_id }}/html"
+          title="HTML preview"
+          sandbox
+          referrerpolicy="no-referrer"
+        ></iframe>
+      </section>
+    {% endif %}
+    {% if attachments %}
+      <section>
+        <h2>Attachments</h2>
+        <ul>
+          {% for attachment in attachments %}
+            <li>
+              <a href="/mail/{{ mailbox }}/{{ delivery_id }}/attachments/{{ attachment.id }}">
+                {{ attachment.filename or attachment.safe_filename }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </body>
+</html>
