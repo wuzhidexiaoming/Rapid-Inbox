@@ -77,7 +77,7 @@ class MessageService:
         )
         return await self._runtime.get_raw_message(delivery_id)
 
-    async def get_public_html_body(
+    async def get_public_html_preview_srcdoc(
         self,
         mailbox_address: str,
         delivery_id: str,
@@ -92,11 +92,26 @@ class MessageService:
             request_ip=request_ip,
         )
         attachments = self._load_attachments_with_content_ids(detail["message_id"], detail["attachments"])
-        return self.rewrite_cid_references(
+        html_body = self.rewrite_cid_references(
             detail["html_body"] or "",
             attachments,
             mailbox_address=detail["mailbox"],
             delivery_id=detail["delivery_id"],
+        )
+        return self.build_public_html_preview_document(html_body)
+
+    def build_public_html_preview_document(self, html_body: str) -> str:
+        return (
+            "<!doctype html>"
+            '<html lang="en">'
+            "<head>"
+            '<meta charset="utf-8" />'
+            '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\' data:; style-src \'unsafe-inline\'; form-action \'none\'; connect-src \'none\'; object-src \'none\'; frame-src \'none\'; script-src \'none\'" />'
+            '<meta name="referrer" content="no-referrer" />'
+            '<base href="about:srcdoc" />'
+            "</head>"
+            f"<body>{html_body}</body>"
+            "</html>"
         )
 
     def rewrite_cid_references(

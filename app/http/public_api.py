@@ -100,8 +100,9 @@ async def get_mailbox_message_attachment(
 ) -> Response:
     require_public_api_key(request, x_api_key)
     request_ip = request.client.host if request.client is not None else None
+    service = _attachment_service(request)
     try:
-        attachment = await _attachment_service(request).get_delivery_attachment(
+        attachment = await service.get_delivery_attachment(
             mailbox_address,
             delivery_id,
             attachment_id,
@@ -112,10 +113,8 @@ async def get_mailbox_message_attachment(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     finally:
         set_active_permission_context(None)
-    disposition = "inline" if attachment.get("is_inline") else "attachment"
-    safe_filename = attachment.get("safe_filename") or "attachment.bin"
     return Response(
         attachment["content"],
         media_type=attachment.get("content_type") or "application/octet-stream",
-        headers={"Content-Disposition": f'{disposition}; filename="{safe_filename}"'},
+        headers=service.build_attachment_response_headers(attachment),
     )

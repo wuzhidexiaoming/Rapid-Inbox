@@ -15,6 +15,8 @@ async def test_public_message_routes_serve_raw_attachment_and_html_frame(app_cli
     assert raw_response.status_code == 200
     assert raw_response.headers["content-type"] == "message/rfc822"
     assert "sandbox" in html_response.text
+    assert "Content-Security-Policy" in html_response.text
+    assert "about:srcdoc" in html_response.text
     assert api_response.status_code == 200
 
 
@@ -71,8 +73,80 @@ async def test_public_message_routes_serve_attachments(app_client, runtime) -> N
 
     assert raw_response.status_code == 200
     assert raw_response.content.startswith(b"attachment contents")
+    assert raw_response.headers["content-disposition"].startswith("attachment;")
+    assert raw_response.headers["x-content-type-options"] == "nosniff"
     assert api_response.status_code == 200
     assert api_response.content.startswith(b"attachment contents")
+    assert api_response.headers["content-disposition"].startswith("attachment;")
+    assert api_response.headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.asyncio
+async def test_public_attachment_routes_allow_inline_only_for_safe_raster_images(app_client, runtime) -> None:
+    attachment_email_bytes = (
+        b"From: Sender <sender@example.com>\r\n"
+        b"To: Foo <foo@adb.com>\r\n"
+        b"Subject: Inline Allowlist Test\r\n"
+        b"Message-ID: <inline-allowlist@example.com>\r\n"
+        b"Date: Sat, 18 Apr 2026 20:00:00 +0000\r\n"
+        b"MIME-Version: 1.0\r\n"
+        b"Content-Type: multipart/related; boundary=boundaryallow\r\n"
+        b"\r\n"
+        b"--boundaryallow\r\n"
+        b"Content-Type: text/plain; charset=utf-8\r\n"
+        b"\r\n"
+        b"Body text.\r\n"
+        b"\r\n"
+        b"--boundaryallow\r\n"
+        b"Content-Type: image/png\r\n"
+        b"Content-Disposition: inline; filename=\"hero.png\"\r\n"
+        b"Content-ID: <hero-png>\r\n"
+        b"\r\n"
+        b"png-bytes\r\n"
+        b"\r\n"
+        b"--boundaryallow\r\n"
+        b"Content-Type: image/svg+xml\r\n"
+        b"Content-Disposition: inline; filename=\"evil.svg\"\r\n"
+        b"Content-ID: <hero-svg>\r\n"
+        b"\r\n"
+        b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\r\n"
+        b"\r\n"
+        b"--boundaryallow--\r\n"
+    )
+
+    await runtime.create_domain("adb.com")
+    public_key = await runtime.api_keys.create_key(
+        name="inline-allowlist-public",
+        kind="public",
+        scopes=["public.read"],
+        domain_ids=[],
+        mailbox_patterns=["foo@adb.com"],
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=attachment_email_bytes,
+    )
+    await runtime.drain_parser_queue()
+
+    mailbox = await runtime.get_mailbox_view("foo@adb.com")
+    delivery_id = mailbox["items"][0]["delivery_id"]
+    detail = await runtime.get_delivery_detail("foo@adb.com", delivery_id)
+    png_attachment_id = next(attachment["id"] for attachment in detail["attachments"] if attachment["content_type"] == "image/png")
+    svg_attachment_id = next(attachment["id"] for attachment in detail["attachments"] if attachment["content_type"] == "image/svg+xml")
+
+    png_response = await app_client.get(f"/mail/foo@adb.com/{delivery_id}/attachments/{png_attachment_id}")
+    svg_response = await app_client.get(
+        f"/api/v1/public/mailboxes/foo@adb.com/messages/{delivery_id}/attachments/{svg_attachment_id}",
+        headers={"X-API-Key": public_key["plain_text"]},
+    )
+
+    assert png_response.status_code == 200
+    assert png_response.headers["content-disposition"].startswith("inline;")
+    assert png_response.headers["x-content-type-options"] == "nosniff"
+    assert svg_response.status_code == 200
+    assert svg_response.headers["content-disposition"].startswith("attachment;")
+    assert svg_response.headers["x-content-type-options"] == "nosniff"
 
 
 @pytest.mark.asyncio
@@ -179,3 +253,5 @@ async def test_public_html_frame_rewrites_cid_references_to_attachment_routes(ap
     assert html_response.status_code == 200
     assert f"/mail/foo@cid.adb.com/{delivery_id}/attachments/{attachment_id}" in html_response.text
     assert "cid:hero-image" not in html_response.text
+    assert "Content-Security-Policy" in html_response.text
+    assert "about:srcdoc" in html_response.text

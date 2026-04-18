@@ -64,13 +64,13 @@ async def message_raw(mailbox_address: str, delivery_id: str, request: Request) 
 async def message_html_frame(mailbox_address: str, delivery_id: str, request: Request) -> HTMLResponse:
     service = _message_service(request)
     try:
-        html_body = await service.get_public_html_body(mailbox_address, delivery_id, surface="web")
+        srcdoc = await service.get_public_html_preview_srcdoc(mailbox_address, delivery_id, surface="web")
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return request.app.state.templates.TemplateResponse(
         request,
         "public/html_frame.html",
-        {"html_body": html_body},
+        {"srcdoc": srcdoc},
         headers={
             "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'",
         },
@@ -94,10 +94,8 @@ async def message_attachment(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    disposition = "inline" if attachment.get("is_inline") else "attachment"
-    safe_filename = attachment.get("safe_filename") or "attachment.bin"
     return Response(
         attachment["content"],
         media_type=attachment.get("content_type") or "application/octet-stream",
-        headers={"Content-Disposition": f'{disposition}; filename="{safe_filename}"'},
+        headers=service.build_attachment_response_headers(attachment),
     )

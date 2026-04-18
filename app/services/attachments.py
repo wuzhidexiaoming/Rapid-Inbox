@@ -5,6 +5,14 @@ from typing import Any
 from app.services.messages import MessageService
 
 
+SAFE_INLINE_CONTENT_TYPES = {
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
+
+
 class AttachmentService:
     def __init__(self, runtime: Any, messages: MessageService | None = None) -> None:
         self._runtime = runtime
@@ -32,6 +40,20 @@ class AttachmentService:
             payload["content"] = self._runtime.storage.read_bytes(attachment["storage_path"])
             return payload
         raise LookupError("attachment not found")
+
+    def build_attachment_response_headers(self, attachment: dict[str, Any]) -> dict[str, str]:
+        disposition = "inline" if self._should_inline_attachment(attachment) else "attachment"
+        safe_filename = attachment.get("safe_filename") or "attachment.bin"
+        return {
+            "Content-Disposition": f'{disposition}; filename="{safe_filename}"',
+            "X-Content-Type-Options": "nosniff",
+        }
+
+    def _should_inline_attachment(self, attachment: dict[str, Any]) -> bool:
+        if not bool(attachment.get("is_inline")):
+            return False
+        content_type = str(attachment.get("content_type") or "").split(";", 1)[0].strip().lower()
+        return content_type in SAFE_INLINE_CONTENT_TYPES
 
 
 __all__ = ["AttachmentService"]
