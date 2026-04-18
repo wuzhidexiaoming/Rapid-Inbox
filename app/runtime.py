@@ -258,6 +258,8 @@ class RapidInboxRuntime:
                 raise ValueError("invalid recovery manifest")
         if not isinstance(domain_policy["plus_addressing_mode"], str):
             raise ValueError("invalid recovery manifest")
+        if domain_policy["plus_addressing_mode"] not in {"keep", "strip"}:
+            raise ValueError("invalid recovery manifest")
         if not isinstance(domain_policy["max_message_size_bytes"], int) or isinstance(domain_policy["max_message_size_bytes"], bool):
             raise ValueError("invalid recovery manifest")
         retention_days = domain_policy["retention_days"]
@@ -266,6 +268,8 @@ class RapidInboxRuntime:
         ):
             raise ValueError("invalid recovery manifest")
         if not isinstance(domain_policy["dns_status"], str):
+            raise ValueError("invalid recovery manifest")
+        if domain_policy["dns_status"] not in {"unknown", "ok", "warning", "error"}:
             raise ValueError("invalid recovery manifest")
 
     async def find_messages_for_reparse(self) -> list[str]:
@@ -722,7 +726,10 @@ class RapidInboxRuntime:
         ).match_address(rcpt_to)
         if match is None:
             raise ValueError(f"unable to recover recipient: {rcpt_to}")
-        domain_policy = self._load_recovery_domain_policy(connection, match.domain_id)
+        try:
+            domain_policy = self._load_recovery_domain_policy(connection, match.domain_id)
+        except LookupError as exc:
+            raise ValueError(f"unable to recover recipient: {rcpt_to}") from exc
         return self._recovery_recipient_payload(rcpt_to, match, domain_policy)
 
     async def _ensure_mailbox_exists(self, match) -> None:

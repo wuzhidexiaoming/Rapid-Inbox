@@ -19,9 +19,9 @@ class RecoveryScanner:
             try:
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 self.runtime.validate_recovery_manifest(manifest)
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                await self.runtime.recover_from_manifest(manifest)
+            except (json.JSONDecodeError, ValueError):
                 # Malformed manifests are skipped so one bad file cannot block startup recovery.
                 continue
-            await self.runtime.recover_from_manifest(manifest)
         for message_id in await self.runtime.find_messages_for_reparse():
             await self.runtime.parse_queue.enqueue(ParseTask(message_id=message_id))

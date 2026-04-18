@@ -206,6 +206,105 @@ async def test_recovery_scanner_skips_bad_manifests_and_recovers_legacy_manifest
 
 
 @pytest.mark.asyncio
+async def test_recovery_scanner_skips_legacy_manifest_when_domain_row_missing(
+    tmp_path,
+    sample_email_bytes: bytes,
+) -> None:
+    settings = Settings(
+        storage_root=tmp_path / "storage",
+        database_path=tmp_path / "storage" / "app.db",
+    )
+    runtime = RapidInboxRuntime(settings)
+
+    await runtime.start()
+    try:
+        await runtime.create_domain("adb.com")
+        await runtime.accept_message(
+            rcpt_tos=["foo@adb.com"],
+            envelope_from="sender@example.com",
+            content=sample_email_bytes,
+        )
+        await runtime.drain_parser_queue()
+    finally:
+        await runtime.stop()
+
+    manifest_path = next(settings.manifests_dir.rglob("*.json"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("recipients")
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, ensure_ascii=False), encoding="utf-8")
+
+    with connect_database(settings.database_path) as connection:
+        connection.execute("DELETE FROM message_deliveries")
+        connection.execute("DELETE FROM messages")
+        connection.execute("DELETE FROM mailboxes")
+        connection.execute("DELETE FROM domains WHERE root_domain_ascii = ?", ("adb.com",))
+        connection.commit()
+
+    repaired = RapidInboxRuntime(settings)
+    await repaired.start()
+    try:
+        assert repaired.list_domains() == []
+        with pytest.raises(LookupError):
+            await repaired.get_mailbox_view("foo@adb.com")
+    finally:
+        await repaired.stop()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("plus_addressing_mode", "invalid-mode"),
+        ("dns_status", "broken"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_recovery_scanner_skips_invalid_domain_policy_values(
+    tmp_path,
+    sample_email_bytes: bytes,
+    field: str,
+    value: object,
+) -> None:
+    settings = Settings(
+        storage_root=tmp_path / "storage",
+        database_path=tmp_path / "storage" / "app.db",
+    )
+    runtime = RapidInboxRuntime(settings)
+
+    await runtime.start()
+    try:
+        await runtime.create_domain("adb.com")
+        await runtime.accept_message(
+            rcpt_tos=["foo@adb.com"],
+            envelope_from="sender@example.com",
+            content=sample_email_bytes,
+        )
+        await runtime.drain_parser_queue()
+    finally:
+        await runtime.stop()
+
+    manifest_path = next(settings.manifests_dir.rglob("*.json"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["recipients"][0]["domain_policy"][field] = value
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, ensure_ascii=False), encoding="utf-8")
+
+    with connect_database(settings.database_path) as connection:
+        connection.execute("DELETE FROM message_deliveries")
+        connection.execute("DELETE FROM messages")
+        connection.execute("DELETE FROM mailboxes")
+        connection.execute("DELETE FROM domains WHERE root_domain_ascii = ?", ("adb.com",))
+        connection.commit()
+
+    repaired = RapidInboxRuntime(settings)
+    await repaired.start()
+    try:
+        assert repaired.list_domains() == []
+        with pytest.raises(LookupError):
+            await repaired.get_mailbox_view("foo@adb.com")
+    finally:
+        await repaired.stop()
+
+
+@pytest.mark.asyncio
 async def test_recovery_scanner_requeues_failed_message_on_startup(
     tmp_path,
     sample_email_bytes: bytes,
