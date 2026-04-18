@@ -28,7 +28,9 @@ def ensure_mailbox_access(grants: PermissionContext, mailbox_address: str, domai
     # The legacy configured token is treated as an unrestricted compatibility path.
     if grants.legacy_credential:
         return
-    if domain_id not in grants.domain_ids:
+    if not grants.domain_ids and not grants.mailbox_patterns:
+        raise PermissionDenied("resource grant missing")
+    if grants.domain_ids and domain_id not in grants.domain_ids:
         raise PermissionDenied("domain grant missing")
     if grants.mailbox_patterns and mailbox_address not in grants.mailbox_patterns:
         raise PermissionDenied("mailbox grant missing")
