@@ -39,16 +39,17 @@ class AuthService:
         return int(row["count"])
 
     async def ensure_bootstrap_admin(self) -> None:
-        if await self.count_admins() > 0:
-            return
-
         password_hash = hash_password(self.settings.bootstrap_admin_password)
         now = utc_now()
         await self.writer.execute(
             lambda connection: connection.execute(
                 """
                 INSERT INTO admins (username, password_hash, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
+                SELECT ?, ?, ?, ?
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM admins
+                )
                 """,
                 (
                     self.settings.bootstrap_admin_username,
@@ -89,7 +90,7 @@ class AuthService:
                 """
                 UPDATE admins
                 SET last_login_at = ?,
-                    last_login_ip = ?
+                    last_login_ip = COALESCE(?, last_login_ip)
                 WHERE id = ?
                 """,
                 (now, ip, row["id"]),

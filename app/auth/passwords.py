@@ -12,6 +12,9 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
-    salt, expected = stored_hash.split("$", 1)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 600_000)
-    return hmac.compare_digest(digest.hex(), expected)
+    try:
+        salt, expected = stored_hash.split("$", 1)
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 600_000)
+        return hmac.compare_digest(digest.hex(), expected)
+    except (AttributeError, TypeError, ValueError):
+        return False
