@@ -424,6 +424,7 @@
         <a class="nav-link{% if request.url.path.startswith('/admin/domains') %} is-active{% endif %}" href="/admin/domains">Domains</a>
         <a class="nav-link{% if request.url.path.startswith('/admin/mailboxes') %} is-active{% endif %}" href="/admin/mailboxes">Mailboxes</a>
         <a class="nav-link{% if request.url.path.startswith('/admin/messages') %} is-active{% endif %}" href="/admin/messages">Messages</a>
+        <a class="nav-link{% if request.url.path == '/admin/live' %} is-active{% endif %}" href="/admin/live">Live</a>
         <a class="nav-link{% if request.url.path.startswith('/admin/api-keys') %} is-active{% endif %}" href="/admin/api-keys">API Keys</a>
         <a class="nav-link{% if request.url.path == '/admin/audit' %} is-active{% endif %}" href="/admin/audit">Audit</a>
         <a class="nav-link{% if request.url.path == '/admin/settings' %} is-active{% endif %}" href="/admin/settings">Settings</a>

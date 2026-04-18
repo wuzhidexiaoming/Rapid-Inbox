@@ -90,7 +90,7 @@ async def test_live_sse_stream_emits_recent_rcpt_event(runtime, sample_email_byt
 
 
 @pytest.mark.asyncio
-async def test_live_sse_stream_emits_new_events_after_initial_snapshot(runtime, sample_email_bytes: bytes) -> None:
+async def test_live_sse_stream_skips_initial_history_after_cursor(runtime, sample_email_bytes: bytes) -> None:
     await runtime.create_domain("adb.com")
     await runtime.accept_message(
         rcpt_tos=["foo@adb.com"],
@@ -99,15 +99,9 @@ async def test_live_sse_stream_emits_new_events_after_initial_snapshot(runtime, 
         smtp_session_id="smtp_live_1",
     )
 
-    stream = stream_smtp_live_events(runtime, poll_interval=0.01)
+    stream = stream_smtp_live_events(runtime, after_seq=0, poll_interval=0.01)
     pending_event: asyncio.Task[str] | None = None
     try:
-        initial_event = await asyncio.wait_for(anext(stream), timeout=0.05)
-        queued_event = await asyncio.wait_for(anext(stream), timeout=0.05)
-
-        assert "rcpt_accepted" in initial_event
-        assert "queued" in queued_event
-
         pending_event = asyncio.create_task(anext(stream))
         await asyncio.sleep(0.05)
         assert not pending_event.done()

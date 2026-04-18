@@ -27,14 +27,18 @@ async def stream_smtp_live_events(
     *,
     poll_interval: float = 0.25,
     history_limit: int = 25,
+    after_seq: int | None = None,
 ) -> AsyncIterator[str]:
-    events, last_seq = runtime.live_state.snapshot_state()
-    if not events:
-        events = _recent_message_events(runtime, limit=history_limit)
-        last_seq = 0
+    if after_seq is None:
+        events, last_seq = runtime.live_state.snapshot_state()
+        if not events:
+            events = _recent_message_events(runtime, limit=history_limit)
+            last_seq = 0
 
-    for event in events:
-        yield encode_sse(event)
+        for event in events:
+            yield encode_sse(event)
+    else:
+        last_seq = after_seq
 
     while True:
         new_events = runtime.live_state.snapshot_since(last_seq)

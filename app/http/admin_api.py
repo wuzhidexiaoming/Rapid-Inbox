@@ -152,15 +152,17 @@ async def live_page(request: Request) -> Response:
         raise HTTPException(status_code=404, detail="live page not found")
 
     runtime = request.app.state.runtime
+    live_events, live_cursor = runtime.live_state.snapshot_state()
+    initial_events = live_events or smtp_live_snapshot(runtime)
     return _render_template(
         request,
         "admin/live.html",
         {
             "page_title": "Live",
             "admin": admin,
-            "events": smtp_live_snapshot(runtime),
+            "events": initial_events,
             "sessions": recent_smtp_sessions(runtime),
-            "stream_url": "/api/v1/admin/live/smtp/stream",
+            "stream_url": f"/api/v1/admin/live/smtp/stream?after_seq={live_cursor}",
             "live_event_types": LIVE_SSE_EVENT_TYPES,
         },
     )
@@ -170,9 +172,10 @@ async def live_page(request: Request) -> Response:
 async def smtp_stream(
     request: Request,
     _admin: PermissionContext = Depends(require_admin_live_access),
+    after_seq: int | None = Query(default=None, ge=0),
 ) -> StreamingResponse:
     return StreamingResponse(
-        stream_smtp_live_events(request.app.state.runtime),
+        stream_smtp_live_events(request.app.state.runtime, after_seq=after_seq),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
