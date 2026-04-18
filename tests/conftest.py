@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import AsyncIterator
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -86,13 +87,17 @@ async def admin_client(app_client: httpx.AsyncClient, runtime: RapidInboxRuntime
 
 @pytest_asyncio.fixture
 async def seeded_message(runtime: RapidInboxRuntime, sample_email_bytes: bytes) -> SeededMessage:
-    await runtime.create_domain("adb.com")
+    domain = await runtime.create_domain("adb.com")
+    await runtime.ensure_smtp_session(
+        "smtp_fixture_1",
+        SimpleNamespace(peer=("127.0.0.1", 2525), host_name="pytest", ssl=None),
+    )
     key = await runtime.api_keys.create_key(
         name="fixture-public",
         kind="public",
         scopes=["public.read"],
-        domain_ids=[],
-        mailbox_patterns=[],
+        domain_ids=[domain["id"]],
+        mailbox_patterns=["foo@adb.com"],
     )
     await runtime.accept_message(
         rcpt_tos=["foo@adb.com"],
