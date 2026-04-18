@@ -13,45 +13,60 @@ from app.ingest.storage import FileStorage
 from app.runtime import RapidInboxRuntime
 
 
-def test_cleanup_stale_parts_preserves_final_attachment_part_filename(tmp_path) -> None:
+def test_cleanup_stale_parts_removes_legacy_visible_temp_files_without_touching_final_attachment_part_filename(
+    tmp_path,
+) -> None:
     settings = Settings(
         storage_root=tmp_path / "storage",
         database_path=tmp_path / "storage" / "app.db",
     )
     storage = FileStorage(settings)
 
-    final_path = storage.resolve("attachments/msg_1/att_1-report.part")
-    final_path.parent.mkdir(parents=True, exist_ok=True)
-    final_path.write_bytes(b"final attachment")
+    legacy_raw_temp_path = storage.resolve("raw/2026/04/18/msg_1.eml.part")
+    legacy_raw_temp_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_raw_temp_path.write_bytes(b"legacy raw temp")
 
-    stale_part_path = storage.resolve("attachments/msg_1/.att_1-report.part.part")
-    stale_part_path.write_bytes(b"stale temp data")
+    final_attachment_path = storage.resolve("attachments/msg_1/att_1-report.part")
+    final_attachment_path.parent.mkdir(parents=True, exist_ok=True)
+    final_attachment_path.write_bytes(b"final attachment")
+
+    stale_hidden_part_path = storage.resolve("attachments/msg_1/.att_1-report.part.part")
+    stale_hidden_part_path.write_bytes(b"stale temp data")
 
     storage.cleanup_stale_parts()
 
-    assert final_path.exists()
-    assert not stale_part_path.exists()
+    assert not legacy_raw_temp_path.exists()
+    assert final_attachment_path.exists()
+    assert not stale_hidden_part_path.exists()
 
 
-def test_write_raw_message_fsyncs_parent_directory(tmp_path, monkeypatch) -> None:
+def test_write_raw_message_fsyncs_created_directory_chain(tmp_path, monkeypatch) -> None:
     settings = Settings(
         storage_root=tmp_path / "storage",
         database_path=tmp_path / "storage" / "app.db",
     )
     storage = FileStorage(settings)
 
-    fsync_is_dir: list[bool] = []
+    fsynced_dirs: list[str] = []
     real_fsync = os.fsync
 
     def recording_fsync(fd: int) -> None:
-        fsync_is_dir.append(stat.S_ISDIR(os.fstat(fd).st_mode))
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            fsynced_dirs.append(os.readlink(f"/proc/self/fd/{fd}"))
         real_fsync(fd)
 
     monkeypatch.setattr(os, "fsync", recording_fsync)
 
     storage.write_raw_message("msg_1", "2026-04-18T20:00:00Z", b"raw body")
 
-    assert fsync_is_dir.count(True) == 1
+    expected_dirs = {
+        str(settings.storage_root),
+        str(settings.storage_root / "raw"),
+        str(settings.storage_root / "raw" / "2026"),
+        str(settings.storage_root / "raw" / "2026" / "04"),
+        str(settings.storage_root / "raw" / "2026" / "04" / "18"),
+    }
+    assert expected_dirs.issubset(set(fsynced_dirs))
 
 
 @pytest.mark.asyncio

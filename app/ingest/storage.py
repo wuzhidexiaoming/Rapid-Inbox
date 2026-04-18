@@ -73,7 +73,12 @@ class FileStorage:
         return self.storage_root / relative_path
 
     def cleanup_stale_parts(self) -> None:
-        # Hidden temp files are the only write artifacts we create now.
+        # Legacy visible temp files are safe to clean in fixed-extension stores.
+        for category in (self._settings.raw_dir, self._settings.text_dir, self._settings.html_dir, self._settings.manifests_dir):
+            for part_file in category.rglob("*.part"):
+                part_file.unlink(missing_ok=True)
+
+        # Hidden temp files are the current write-ahead artifact naming scheme.
         for part_file in self.storage_root.rglob(".*.part"):
             part_file.unlink(missing_ok=True)
 
@@ -91,9 +96,17 @@ class FileStorage:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(part_path, final_path)
-        self._fsync_parent_directory(final_path.parent)
+        self._fsync_directory_chain(final_path.parent)
 
-    def _fsync_parent_directory(self, directory: Path) -> None:
+    def _fsync_directory_chain(self, directory: Path) -> None:
+        current = directory
+        while True:
+            self._fsync_directory(current)
+            if current.parent == current:
+                break
+            current = current.parent
+
+    def _fsync_directory(self, directory: Path) -> None:
         flags = os.O_RDONLY
         if hasattr(os, "O_DIRECTORY"):
             flags |= os.O_DIRECTORY
