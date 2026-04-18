@@ -73,7 +73,8 @@ class FileStorage:
         return self.storage_root / relative_path
 
     def cleanup_stale_parts(self) -> None:
-        for part_file in self.storage_root.rglob("*.part"):
+        # Hidden temp files are the only write artifacts we create now.
+        for part_file in self.storage_root.rglob(".*.part"):
             part_file.unlink(missing_ok=True)
 
     def _dated_path(self, category: str, message_id: str, suffix: str, received_at: str) -> str:
@@ -83,9 +84,24 @@ class FileStorage:
     def _write_bytes(self, relative_path: str, content: bytes) -> None:
         final_path = self.resolve(relative_path)
         final_path.parent.mkdir(parents=True, exist_ok=True)
-        part_path = final_path.with_suffix(f"{final_path.suffix}.part")
+        # Keep write-ahead temp files hidden so final filenames can safely end in ".part".
+        part_path = final_path.with_name(f".{final_path.name}.part")
         with part_path.open("wb") as handle:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(part_path, final_path)
+        self._fsync_parent_directory(final_path.parent)
+
+    def _fsync_parent_directory(self, directory: Path) -> None:
+        flags = os.O_RDONLY
+        if hasattr(os, "O_DIRECTORY"):
+            flags |= os.O_DIRECTORY
+        try:
+            directory_fd = os.open(directory, flags)
+        except OSError:
+            return
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)

@@ -1,12 +1,57 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import stat
 from types import SimpleNamespace
 
 import pytest
 
 from app.config import Settings
+from app.ingest.storage import FileStorage
 from app.runtime import RapidInboxRuntime
+
+
+def test_cleanup_stale_parts_preserves_final_attachment_part_filename(tmp_path) -> None:
+    settings = Settings(
+        storage_root=tmp_path / "storage",
+        database_path=tmp_path / "storage" / "app.db",
+    )
+    storage = FileStorage(settings)
+
+    final_path = storage.resolve("attachments/msg_1/att_1-report.part")
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    final_path.write_bytes(b"final attachment")
+
+    stale_part_path = storage.resolve("attachments/msg_1/.att_1-report.part.part")
+    stale_part_path.write_bytes(b"stale temp data")
+
+    storage.cleanup_stale_parts()
+
+    assert final_path.exists()
+    assert not stale_part_path.exists()
+
+
+def test_write_raw_message_fsyncs_parent_directory(tmp_path, monkeypatch) -> None:
+    settings = Settings(
+        storage_root=tmp_path / "storage",
+        database_path=tmp_path / "storage" / "app.db",
+    )
+    storage = FileStorage(settings)
+
+    fsync_is_dir: list[bool] = []
+    real_fsync = os.fsync
+
+    def recording_fsync(fd: int) -> None:
+        fsync_is_dir.append(stat.S_ISDIR(os.fstat(fd).st_mode))
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", recording_fsync)
+
+    storage.write_raw_message("msg_1", "2026-04-18T20:00:00Z", b"raw body")
+
+    assert fsync_is_dir.count(True) == 1
 
 
 @pytest.mark.asyncio
@@ -33,14 +78,18 @@ async def test_accept_message_writes_manifest_for_recovery(tmp_path, sample_emai
         await runtime.drain_parser_queue()
 
         manifest_paths = list(settings.manifests_dir.rglob("*.json"))
+        message_id = response.removeprefix("250 queued as ")
         assert response.startswith("250 queued as ")
         assert len(manifest_paths) == 1
 
         manifest = json.loads(manifest_paths[0].read_text(encoding="utf-8"))
+        assert manifest["message_id"] == message_id
         assert manifest["smtp_session_id"] == "smtp_test_1"
         assert manifest["envelope_from"] == "sender@example.com"
         assert manifest["rcpt_tos"] == ["foo@adb.com", "bar@adb.com"]
+        assert manifest["raw_sha256"] == hashlib.sha256(sample_email_bytes).hexdigest()
         assert manifest["raw_path"].endswith(".eml")
+        assert manifest["raw_size_bytes"] == len(sample_email_bytes)
     finally:
         await runtime.stop()
 
