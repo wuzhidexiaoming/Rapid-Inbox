@@ -615,7 +615,7 @@ class RapidInboxRuntime:
         for storage_path in storage_paths:
             try:
                 self.storage.resolve(storage_path).unlink(missing_ok=True)
-            except OSError:
+            except Exception:
                 continue
 
     def _apply_recovery_manifest(self, connection: sqlite3.Connection, manifest: dict[str, Any]) -> None:

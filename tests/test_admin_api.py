@@ -499,7 +499,7 @@ async def test_admin_api_attachment_cleanup_errors_do_not_stop_later_reparses(ru
 
     def failing_unlink(self, missing_ok: bool = False):  # type: ignore[override]
         if self == first_attachment_path:
-            raise OSError("cleanup failed")
+            raise RuntimeError("cleanup failed")
         return original_unlink(self, missing_ok=missing_ok)
 
     def reparsed_message(message_id: str) -> ParsedMessage:
