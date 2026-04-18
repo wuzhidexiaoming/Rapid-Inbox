@@ -17,6 +17,7 @@ class RecoveryScanner:
         self.runtime.storage.cleanup_stale_parts()
         policy_manifests: list[dict[str, object]] = []
         legacy_manifests: list[dict[str, object]] = []
+        latest_policy_snapshots: dict[int, dict[str, object]] = {}
         for manifest_path in sorted(self.runtime.settings.manifests_dir.rglob("*.json")):
             try:
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -26,8 +27,15 @@ class RecoveryScanner:
                 continue
             if self._has_domain_policy(manifest):
                 policy_manifests.append(manifest)
+                self._record_latest_policy_snapshots(latest_policy_snapshots, manifest)
             else:
                 legacy_manifests.append(manifest)
+
+        for snapshot in self._sorted_snapshots(latest_policy_snapshots):
+            try:
+                await self.runtime.recover_domain_snapshot(snapshot)
+            except ValueError:
+                continue
 
         for manifest in policy_manifests + legacy_manifests:
             try:
@@ -43,7 +51,33 @@ class RecoveryScanner:
         recipients = manifest.get("recipients")
         if not isinstance(recipients, list) or not recipients:
             return False
-        first_recipient = recipients[0]
-        if not isinstance(first_recipient, dict):
-            return False
-        return first_recipient.get("domain_policy") is not None
+        return any(isinstance(recipient, dict) and recipient.get("domain_policy") is not None for recipient in recipients)
+
+    def _record_latest_policy_snapshots(
+        self,
+        latest_policy_snapshots: dict[int, dict[str, object]],
+        manifest: dict[str, object],
+    ) -> None:
+        received_at = str(manifest["received_at"])
+        for recipient in manifest["recipients"]:
+            if not isinstance(recipient, dict):
+                continue
+            domain_policy = recipient.get("domain_policy")
+            if domain_policy is None:
+                continue
+            domain_id = int(recipient["domain_id"])
+            snapshot = {
+                "domain_id": domain_id,
+                "root_domain_ascii": str(recipient["root_domain_ascii"]),
+                "received_at": received_at,
+                "domain_policy": domain_policy,
+            }
+            current = latest_policy_snapshots.get(domain_id)
+            if current is None or str(current["received_at"]) <= received_at:
+                latest_policy_snapshots[domain_id] = snapshot
+
+    def _sorted_snapshots(self, latest_policy_snapshots: dict[int, dict[str, object]]) -> list[dict[str, object]]:
+        return sorted(
+            latest_policy_snapshots.values(),
+            key=lambda snapshot: (str(snapshot["received_at"]), int(snapshot["domain_id"])),
+        )

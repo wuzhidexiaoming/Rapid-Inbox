@@ -518,3 +518,111 @@ async def test_recovery_scanner_recreates_deleted_domain_from_manifest_metadata(
     assert domain["public_api_enabled"] == 0
     assert domain["is_hidden"] == 1
     assert delivery["rcpt_to"] == "Foo+Tag@adb.com"
+
+
+@pytest.mark.asyncio
+async def test_recovery_scanner_uses_latest_policy_snapshot_for_deleted_domain(
+    tmp_path,
+    sample_email_bytes: bytes,
+) -> None:
+    settings = Settings(
+        storage_root=tmp_path / "storage",
+        database_path=tmp_path / "storage" / "app.db",
+    )
+    runtime = RapidInboxRuntime(settings)
+
+    await runtime.start()
+    try:
+        await runtime.create_domain(
+            "adb.com",
+            accept_exact=True,
+            accept_subdomains=False,
+            plus_addressing_mode="keep",
+            local_part_case_sensitive=False,
+        )
+        await runtime.accept_message(
+            rcpt_tos=["Foo+Tag@adb.com"],
+            envelope_from="sender@example.com",
+            content=sample_email_bytes,
+        )
+
+        with connect_database(settings.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE domains
+                SET plus_addressing_mode = 'strip',
+                    local_part_case_sensitive = 1
+                WHERE root_domain_ascii = ?
+                """,
+                ("adb.com",),
+            )
+            connection.commit()
+        runtime.domains.reload()
+
+        await runtime.accept_message(
+            rcpt_tos=["Foo+Tag@adb.com"],
+            envelope_from="sender@example.com",
+            content=sample_email_bytes,
+        )
+        await runtime.drain_parser_queue()
+    finally:
+        await runtime.stop()
+
+    manifest_paths = sorted(settings.manifests_dir.rglob("*.json"))
+    assert len(manifest_paths) == 2
+
+    old_manifest_path = None
+    new_manifest_path = None
+    for manifest_path in manifest_paths:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        policy = manifest["recipients"][0]["domain_policy"]
+        if policy["plus_addressing_mode"] == "keep":
+            old_manifest_path = manifest_path
+            old_manifest = manifest
+        else:
+            new_manifest_path = manifest_path
+            new_manifest = manifest
+
+    assert old_manifest_path is not None
+    assert new_manifest_path is not None
+
+    old_manifest["received_at"] = "2026-04-17T20:00:00Z"
+    new_manifest["received_at"] = "2026-04-18T20:00:00Z"
+    old_target_path = settings.manifests_dir / "2026" / "04" / "17" / old_manifest_path.name
+    new_target_path = settings.manifests_dir / "2026" / "04" / "18" / new_manifest_path.name
+    old_target_path.parent.mkdir(parents=True, exist_ok=True)
+    new_target_path.parent.mkdir(parents=True, exist_ok=True)
+    old_manifest_path.rename(old_target_path)
+    if new_manifest_path != new_target_path:
+        new_manifest_path.rename(new_target_path)
+    old_target_path.write_text(json.dumps(old_manifest, sort_keys=True, ensure_ascii=False), encoding="utf-8")
+    new_target_path.write_text(json.dumps(new_manifest, sort_keys=True, ensure_ascii=False), encoding="utf-8")
+
+    with connect_database(settings.database_path) as connection:
+        connection.execute("DELETE FROM message_deliveries")
+        connection.execute("DELETE FROM messages")
+        connection.execute("DELETE FROM mailboxes")
+        connection.execute("DELETE FROM domains WHERE root_domain_ascii = ?", ("adb.com",))
+        connection.commit()
+
+    repaired = RapidInboxRuntime(settings)
+    await repaired.start()
+    try:
+        with connect_database(settings.database_path) as connection:
+            domain = connection.execute(
+                """
+                SELECT plus_addressing_mode, local_part_case_sensitive
+                FROM domains
+                WHERE root_domain_ascii = ?
+                """,
+                ("adb.com",),
+            ).fetchone()
+            message_count = connection.execute("SELECT COUNT(*) AS count FROM messages").fetchone()
+            delivery_count = connection.execute("SELECT COUNT(*) AS count FROM message_deliveries").fetchone()
+
+        assert domain["plus_addressing_mode"] == "strip"
+        assert domain["local_part_case_sensitive"] == 1
+        assert message_count["count"] == 2
+        assert delivery_count["count"] == 2
+    finally:
+        await repaired.stop()

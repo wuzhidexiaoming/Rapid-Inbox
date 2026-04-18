@@ -183,6 +183,9 @@ class RapidInboxRuntime:
     async def recover_from_manifest(self, manifest: dict[str, Any]) -> None:
         await self.writer.execute(lambda connection: self._apply_recovery_manifest(connection, manifest))
 
+    async def recover_domain_snapshot(self, snapshot: dict[str, Any]) -> None:
+        await self.writer.execute(lambda connection: self._ensure_recovery_domain_record(connection, snapshot, str(snapshot["received_at"])))
+
     def validate_recovery_manifest(self, manifest: Any) -> None:
         if not isinstance(manifest, dict):
             raise ValueError("invalid recovery manifest")
