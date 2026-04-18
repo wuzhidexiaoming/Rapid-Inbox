@@ -11,10 +11,11 @@ class SettingsService:
     DEFAULTS: dict[str, Any] = {
         "max_recipients_per_message": 20,
     }
-    INTEGER_SETTINGS = {
+    SUPPORTED_SETTINGS = {
         "max_message_size_bytes",
         "max_recipients_per_message",
     }
+    INTEGER_SETTINGS = SUPPORTED_SETTINGS
 
     def __init__(self, runtime: Any) -> None:
         self._runtime = runtime
@@ -33,6 +34,7 @@ class SettingsService:
         if not isinstance(payload, dict):
             raise ValueError("invalid settings payload")
 
+        self._validate_supported_keys(payload)
         normalized = self._normalize_payload(payload)
         if not normalized:
             return self.get_settings()
@@ -77,6 +79,8 @@ class SettingsService:
         settings: dict[str, Any] = {}
         for row in rows:
             key = str(row["key"])
+            if key not in self.SUPPORTED_SETTINGS:
+                continue
             settings[key] = self._deserialize_value(key, row["value"])
         return settings
 
@@ -89,6 +93,11 @@ class SettingsService:
             else:
                 normalized[key_text] = self._coerce_text_value(value)
         return normalized
+
+    def _validate_supported_keys(self, payload: dict[str, Any]) -> None:
+        unsupported = sorted({str(key) for key in payload if str(key) not in self.SUPPORTED_SETTINGS})
+        if unsupported:
+            raise ValueError(f"unsupported settings: {', '.join(unsupported)}")
 
     def _coerce_positive_int(self, key: str, value: Any) -> int:
         if isinstance(value, bool):

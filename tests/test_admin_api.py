@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from app.config import Settings
+from app.db.connection import connect_database
 from app.main import create_app
 from app.smtp.handler import RapidInboxHandler
 
@@ -190,3 +191,26 @@ async def test_admin_api_settings_reload_from_database_on_restart(tmp_path) -> N
         result = await handler.handle_DATA(None, session, envelope)
 
         assert result == "552 message too large"
+
+
+@pytest.mark.asyncio
+async def test_admin_api_settings_allowlist_rejects_unsupported_keys_and_filters_echo(admin_client, runtime) -> None:
+    rejected = await admin_client.patch(
+        "/api/v1/admin/settings",
+        json={"admin_token": "super-secret"},
+    )
+
+    with connect_database(runtime.settings.database_path) as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO system_settings (key, value, updated_at)
+            VALUES (?, ?, ?)
+            """,
+            ("admin_token", "super-secret", "2026-04-18T00:00:00Z"),
+        )
+
+    listed = await admin_client.get("/api/v1/admin/settings")
+
+    assert rejected.status_code == 422
+    assert "admin_token" not in listed.json()
+    assert set(listed.json()) == {"max_message_size_bytes", "max_recipients_per_message"}
