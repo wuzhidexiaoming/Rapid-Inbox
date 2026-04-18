@@ -1,14 +1,55 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 from app.auth.permissions import PermissionContext
+from app.http.sse import encode_sse, recent_smtp_sessions, smtp_live_snapshot
+from app.ingest.storage import utc_now
+from app.services.dns_check import DnsCheckService
 
 
 router = APIRouter()
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client is not None else None
+
+
+async def _current_admin_session(request: Request) -> dict[str, Any] | None:
+    cookie_name = request.app.state.settings.session_cookie_name
+    token = request.cookies.get(cookie_name)
+    if not token:
+        return None
+
+    try:
+        return await request.app.state.runtime.auth.get_session_admin(token, ip=_client_ip(request))
+    except LookupError:
+        return None
+
+
+def _session_permission_context(admin: dict[str, Any]) -> PermissionContext:
+    return PermissionContext(
+        scopes=("live.read",),
+        domain_ids=(),
+        mailbox_patterns=(),
+        api_key_id=None,
+        public_id=str(admin.get("session_id") or admin.get("username") or "admin-session"),
+        name=str(admin.get("display_name") or admin.get("username") or "admin-session"),
+        kind="admin",
+        legacy_credential=True,
+    )
+
+
+def _render_template(request: Request, template_name: str, context: dict[str, Any], *, status_code: int = 200) -> Response:
+    response = request.app.state.templates.TemplateResponse(request, template_name, context)
+    response.status_code = status_code
+    return response
 
 
 def require_admin_key(
@@ -88,6 +129,108 @@ async def _write_audit_best_effort(
     except Exception:
         # Mutation already completed; audit writes are best-effort here.
         return
+
+
+async def require_admin_live_access(
+    request: Request,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+) -> PermissionContext:
+    if x_api_key is not None:
+        admin = require_admin_key(request, x_api_key)
+        require_admin_scope(admin, "live.read")
+        return admin
+
+    admin_session = await _current_admin_session(request)
+    if admin_session is None:
+        raise HTTPException(status_code=404, detail="live page not found")
+    return _session_permission_context(admin_session)
+
+
+@router.get("/admin/live", response_class=HTMLResponse)
+async def live_page(request: Request) -> Response:
+    admin = await _current_admin_session(request)
+    if admin is None:
+        raise HTTPException(status_code=404, detail="live page not found")
+
+    runtime = request.app.state.runtime
+    return _render_template(
+        request,
+        "admin/live.html",
+        {
+            "page_title": "Live",
+            "admin": admin,
+            "events": smtp_live_snapshot(runtime),
+            "sessions": recent_smtp_sessions(runtime),
+            "stream_url": "/api/v1/admin/live/smtp/stream",
+        },
+    )
+
+
+@router.get("/api/v1/admin/live/smtp/stream")
+async def smtp_stream(
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_live_access),
+) -> StreamingResponse:
+    async def event_source() -> AsyncIterator[str]:
+        for event in smtp_live_snapshot(request.app.state.runtime):
+            yield encode_sse(event)
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.post("/api/v1/admin/domains/{domain_id}/dns-check")
+async def run_domain_dns_check(
+    domain_id: int,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "domains.write")
+    await _record_admin_key_usage(request, admin)
+    runtime = request.app.state.runtime
+
+    try:
+        domain = runtime.domains.get_domain(domain_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    dns_check = DnsCheckService()
+    check_result = await dns_check.run_dns_check(domain["root_domain_ascii"])
+    checked_at = utc_now()
+    stored_result = {
+        "domain_id": domain_id,
+        "root_domain_ascii": domain["root_domain_ascii"],
+        "checked_at": checked_at,
+        **check_result,
+    }
+
+    def operation(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            UPDATE domains
+            SET dns_status = ?,
+                dns_last_checked_at = ?,
+                dns_details_json = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                check_result["status"],
+                checked_at,
+                json.dumps(stored_result, ensure_ascii=False),
+                checked_at,
+                domain_id,
+            ),
+        )
+
+    await runtime.writer.execute(operation)
+    updated_domain = runtime.domains.get_domain(domain_id)
+    updated_domain["dns_check"] = stored_result
+    await _write_audit_best_effort(request, admin, "domains.dns_check", "domain", str(domain_id), "success")
+    return updated_domain
 
 
 @router.get("/api/v1/admin/domains")

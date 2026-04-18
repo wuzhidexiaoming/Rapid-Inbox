@@ -1,0 +1,172 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+  <section class="card">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">SMTP</p>
+        <h2>Live activity</h2>
+      </div>
+      <div class="button-row">
+        <span class="badge" id="stream-status">Connecting</span>
+        <a class="button button--ghost" href="/admin/messages">Messages</a>
+      </div>
+    </div>
+    <p class="muted">Streaming from <code>{{ stream_url }}</code>.</p>
+    <ul class="stack" id="live-feed">
+      {% if events %}
+        {% for event in events %}
+          <li class="stack-row" data-event-type="{{ event.type }}">
+            <div class="stack-meta">
+              <strong>{{ event.type }}</strong>
+              <span class="muted">{{ event.ts }}</span>
+              {% if event.session_id is defined and event.session_id %}
+                <span class="muted">Session {{ event.session_id }}</span>
+              {% endif %}
+              {% if event.rcpt_to is defined and event.rcpt_to %}
+                <span class="muted">{{ event.rcpt_to }}</span>
+              {% endif %}
+              {% if event.message_id is defined and event.message_id %}
+                <span class="muted">Message {{ event.message_id }}</span>
+              {% endif %}
+            </div>
+            <code>{{ event | tojson }}</code>
+          </li>
+        {% endfor %}
+      {% else %}
+        <li class="muted">No live SMTP events yet.</li>
+      {% endif %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">Sessions</p>
+        <h2>Recent session history</h2>
+      </div>
+    </div>
+    {% if sessions %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Session</th>
+              <th>Status</th>
+              <th>Remote</th>
+              <th>HELO</th>
+              <th>TLS</th>
+              <th>Last RCPT</th>
+              <th>Connected</th>
+              <th>Last command</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for session in sessions %}
+              <tr>
+                <td><code>{{ session.id }}</code></td>
+                <td>{{ session.status }}</td>
+                <td>
+                  {{ session.remote_ip }}
+                  {% if session.remote_port is not none %}:{{ session.remote_port }}{% endif %}
+                </td>
+                <td>{{ session.helo_name or "None" }}</td>
+                <td>{{ "Yes" if session.tls_used else "No" }}</td>
+                <td>{{ session.last_rcpt_to_sample or "None" }}</td>
+                <td>{{ session.connect_at }}</td>
+                <td>{{ session.last_command_at or "None" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No SMTP session history yet.</p>
+    {% endif %}
+  </section>
+
+  <script>
+    (() => {
+      const feed = document.getElementById("live-feed");
+      const status = document.getElementById("stream-status");
+      if (!feed || !window.EventSource) {
+        if (status) {
+          status.textContent = "SSE unavailable";
+        }
+        return;
+      }
+
+      const appendEvent = (payload) => {
+        const emptyState = feed.querySelector(".muted");
+        if (emptyState && feed.children.length === 1 && emptyState.textContent.includes("No live SMTP events yet.")) {
+          feed.innerHTML = "";
+        }
+
+        const item = document.createElement("li");
+        item.className = "stack-row";
+        item.dataset.eventType = payload.type || "event";
+
+        const meta = document.createElement("div");
+        meta.className = "stack-meta";
+
+        const title = document.createElement("strong");
+        title.textContent = payload.type || "event";
+        meta.appendChild(title);
+
+        const ts = document.createElement("span");
+        ts.className = "muted";
+        ts.textContent = payload.ts || "";
+        meta.appendChild(ts);
+
+        if (payload.session_id) {
+          const session = document.createElement("span");
+          session.className = "muted";
+          session.textContent = `Session ${payload.session_id}`;
+          meta.appendChild(session);
+        }
+
+        if (payload.rcpt_to) {
+          const rcpt = document.createElement("span");
+          rcpt.className = "muted";
+          rcpt.textContent = payload.rcpt_to;
+          meta.appendChild(rcpt);
+        }
+
+        if (payload.message_id) {
+          const message = document.createElement("span");
+          message.className = "muted";
+          message.textContent = `Message ${payload.message_id}`;
+          meta.appendChild(message);
+        }
+
+        const code = document.createElement("code");
+        code.textContent = JSON.stringify(payload);
+
+        item.appendChild(meta);
+        item.appendChild(code);
+        feed.prepend(item);
+      };
+
+      const source = new EventSource({{ stream_url | tojson }});
+      if (status) {
+        status.textContent = "Connected";
+      }
+
+      ["connected", "ehlo", "mail_from", "rcpt_accepted", "rcpt_rejected", "queued", "data_begin", "data_accepted", "quit", "error"].forEach((type) => {
+        source.addEventListener(type, (event) => {
+          try {
+            appendEvent(JSON.parse(event.data));
+          } catch (error) {
+            appendEvent({type, raw: event.data});
+          }
+        });
+      });
+
+      source.onerror = () => {
+        if (status) {
+          status.textContent = "Disconnected";
+        }
+      };
+    })();
+  </script>
+{% endblock %}
