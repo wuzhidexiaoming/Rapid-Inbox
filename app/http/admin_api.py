@@ -86,6 +86,7 @@ async def create_domain(
     root_domain = payload.get("root_domain")
     if not isinstance(root_domain, str) or not root_domain.strip():
         raise HTTPException(status_code=422, detail="root_domain is required")
+    settings = runtime.get_settings()
 
     created = await runtime.create_domain(
         root_domain,
@@ -95,7 +96,7 @@ async def create_domain(
         public_api_enabled=payload.get("public_api_enabled", True),
         plus_addressing_mode=payload.get("plus_addressing_mode", "keep"),
         local_part_case_sensitive=payload.get("local_part_case_sensitive", False),
-        max_message_size_bytes=payload.get("max_message_size_bytes", request.app.state.settings.max_message_size_bytes),
+        max_message_size_bytes=payload.get("max_message_size_bytes", settings["max_message_size_bytes"]),
     )
     await runtime.audit.log(
         "api_key",
