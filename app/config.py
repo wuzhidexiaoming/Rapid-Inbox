@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,9 +56,81 @@ class Settings:
             self.manifests_dir,
             self.tmp_dir,
         ):
-            path.mkdir(parents=True, exist_ok=True)
+                path.mkdir(parents=True, exist_ok=True)
+
+
+def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
+    if not dotenv_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        key, separator, value = line.partition("=")
+        if not separator:
+            continue
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if value[:1] in {"'", '"'} and value[-1:] == value[:1]:
+            value = ast.literal_eval(value)
+        values[key] = value
+    return values
+
+
+def _resolve_path(value: str | None, *, default: Path, base_dir: Path) -> Path:
+    if value is None or not value.strip():
+        return default
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = base_dir / path
+    return path
+
+
+def _coerce_str(raw: dict[str, str], key: str, default: str) -> str:
+    value = raw.get(key)
+    return default if value is None else value
+
+
+def _coerce_int(raw: dict[str, str], key: str, default: int) -> int:
+    value = raw.get(key)
+    if value is None or not value.strip():
+        return default
+    return int(value)
 
 
 def default_settings(base_dir: Path) -> Settings:
-    storage_root = base_dir / "storage"
-    return Settings(storage_root=storage_root, database_path=storage_root / "app.db")
+    dotenv_values = _load_dotenv(base_dir / ".env")
+    merged = {**dotenv_values, **os.environ}
+
+    storage_root = _resolve_path(
+        merged.get("STORAGE_ROOT"),
+        default=base_dir / "storage",
+        base_dir=base_dir,
+    )
+    database_path = _resolve_path(
+        merged.get("DATABASE_PATH"),
+        default=storage_root / "app.db",
+        base_dir=base_dir,
+    )
+
+    return Settings(
+        storage_root=storage_root,
+        database_path=database_path,
+        bootstrap_admin_username=_coerce_str(merged, "BOOTSTRAP_ADMIN_USERNAME", "admin"),
+        bootstrap_admin_password=_coerce_str(merged, "BOOTSTRAP_ADMIN_PASSWORD", "change-me-now"),
+        session_cookie_name=_coerce_str(merged, "SESSION_COOKIE_NAME", "rapid_inbox_session"),
+        host=_coerce_str(merged, "HOST", "127.0.0.1"),
+        port=_coerce_int(merged, "PORT", 8000),
+        smtp_host=_coerce_str(merged, "SMTP_HOST", "127.0.0.1"),
+        smtp_port=_coerce_int(merged, "SMTP_PORT", 25),
+        max_message_size_bytes=_coerce_int(merged, "MAX_MESSAGE_SIZE_BYTES", 52_428_800),
+        max_recipients_per_message=_coerce_int(merged, "MAX_RECIPIENTS_PER_MESSAGE", 20),
+        admin_token=_coerce_str(merged, "ADMIN_TOKEN", "dev-admin-token"),
+        public_api_key=_coerce_str(merged, "PUBLIC_API_KEY", "public-demo-key"),
+    )

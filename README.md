@@ -5,7 +5,7 @@ Rapid Inbox is a local-first inbound mailbox service. It receives mail over SMTP
 ## Local Development
 
 1. `python3.12 -m venv .venv`
-2. `.venv/bin/pip install -e .[dev]`
+2. `.venv/bin/pip install -c constraints-dev.txt -e .[dev]`
 3. `.venv/bin/rapid-inbox-http`
 4. Open `http://127.0.0.1:8000/admin/login`
 
@@ -14,7 +14,7 @@ If you need a standalone SMTP listener for a custom setup, you can still run `.v
 
 ## Defaults
 
-The startup defaults live in `app/config.py` and are mirrored in `.env.example` for reference:
+The startup defaults live in `app/config.py`, and the launchers now automatically load `.env` from the current working directory before falling back to code defaults:
 
 - Bootstrap admin username: `admin`
 - Bootstrap admin password: `change-me-now`
@@ -26,7 +26,21 @@ The startup defaults live in `app/config.py` and are mirrored in `.env.example` 
 
 The default launcher flow creates the bootstrap admin with username `admin` and password `change-me-now`, so the login step is immediately usable on a fresh local checkout.
 
-The app does not auto-load `.env` yet, so treat `.env.example` as a reference template unless you add your own loader. If you want a different bootstrap admin password, override `bootstrap_admin_password` when constructing `Settings` in a custom launcher.
+Configuration priority is:
+
+1. Real environment variables
+2. `.env` in the project root / current working directory
+3. Code defaults in `app/config.py`
+
+That means you can copy `.env.example` to `.env`, edit it, and the default `rapid-inbox-http` / `rapid-inbox-smtp` launchers will pick it up automatically.
+
+## Dependency Pins
+
+The direct dependencies in `pyproject.toml` are pinned to exact versions, and `constraints-dev.txt` contains the full tested dependency set used by the development environment.
+
+If you want to minimize pip backtracking and repeated resolver retries, prefer:
+
+` .venv/bin/pip install -c constraints-dev.txt -e .[dev] `
 
 ## Notes
 
