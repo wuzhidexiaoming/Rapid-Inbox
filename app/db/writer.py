@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
@@ -15,10 +16,10 @@ T = TypeVar("T")
 class DatabaseWriter:
     def __init__(self, database_path: Path) -> None:
         self._database_path = database_path
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
 
-    async def execute(self, operation: Callable[[sqlite3.Connection], T]) -> T:
-        async with self._lock:
+    def _execute_sync(self, operation: Callable[[sqlite3.Connection], T]) -> T:
+        with self._lock:
             with connect_database(self._database_path) as connection:
                 try:
                     result = operation(connection)
@@ -27,3 +28,6 @@ class DatabaseWriter:
                     raise
                 connection.commit()
                 return result
+
+    async def execute(self, operation: Callable[[sqlite3.Connection], T]) -> T:
+        return await asyncio.to_thread(self._execute_sync, operation)

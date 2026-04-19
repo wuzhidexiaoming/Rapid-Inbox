@@ -1,69 +1,176 @@
 {% extends "admin/base.html" %}
 
+{% block head %}
+<style>
+  .form-grid {
+    display: grid;
+    gap: 1.5rem;
+  }
+  
+  .two-up {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  
+  .form-section {
+    margin-top: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .key-reveal {
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 0.75rem;
+    padding: 2.5rem 2rem;
+    margin-bottom: 2rem;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(16, 185, 129, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .key-reveal::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--success), transparent);
+  }
+
+  .key-value-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 0.5rem;
+    padding: 1rem 1.5rem;
+    margin: 1.5rem auto;
+    max-width: 600px;
+  }
+
+  .key-value {
+    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+    font-size: 1.15rem;
+    color: var(--success);
+    word-break: break-all;
+    margin: 0;
+  }
+
+  .copy-btn {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .copy-btn:hover {
+    background: var(--success);
+    color: #fff;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
   {% if error %}
-    <div class="notice notice--error">{{ error }}</div>
+    <div class="notice" data-aos="fade-down">{{ error }}</div>
   {% endif %}
+
   {% if created_api_key %}
-    <section class="card">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">已创建</p>
-          <h2>{{ created_api_key.name }}</h2>
-        </div>
+    <section class="key-reveal" data-aos="zoom-in" data-aos-duration="600">
+      <h2 style="color: var(--success); margin-bottom: 0.5rem;">API 密钥创建成功</h2>
+      <p style="color: var(--muted); font-size: 0.95rem;">请立即保存这串密钥明文。出于安全原因，页面刷新后将永远不再完整展示。</p>
+      
+      <div class="key-value-box">
+        <code class="key-value" id="raw-api-key">{{ created_api_key.plain_text }}</code>
+        <button class="copy-btn" onclick="copyApiKey()">复制</button>
       </div>
-      <p class="muted">请立即保存这串密钥明文。页面只会展示一次。</p>
-      <pre>{{ created_api_key.plain_text }}</pre>
+      <p style="color: var(--text); font-weight: 600;">名称：{{ created_api_key.name }}</p>
     </section>
+
+    <script>
+      function copyApiKey() {
+        const keyText = document.getElementById('raw-api-key').textContent;
+        navigator.clipboard.writeText(keyText).then(() => {
+          const btn = document.querySelector('.copy-btn');
+          const originalText = btn.textContent;
+          btn.textContent = '已复制！';
+          btn.style.background = 'var(--success)';
+          btn.style.color = '#fff';
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = 'rgba(16, 185, 129, 0.15)';
+            btn.style.color = 'var(--success)';
+          }, 2000);
+        });
+      }
+    </script>
   {% endif %}
-  <section class="card">
-    <div class="section-title">
-      <div>
-        <p class="eyebrow">API 密钥</p>
-        <h2>管理与服务访问密钥</h2>
-        <p class="section-copy">可以在这里创建新密钥、分配作用域，并按需绑定域名或邮箱范围。</p>
-      </div>
+
+  <section class="card" data-aos="fade-up">
+    <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
+      <h2 style="margin: 0 0 0.5rem 0;">新增 API 密钥</h2>
+      <p class="muted" style="margin: 0; font-size: 0.95rem;">创建访问令牌用于系统集成，支持细粒度的作用域、域名与邮箱规则限制。</p>
     </div>
-    <form method="post" action="/admin/api-keys" class="form-grid two-up" style="margin-bottom:1rem;">
-      <label>
-        <div class="muted">名称</div>
-        <input type="text" name="name" value="新的 API 密钥" />
-      </label>
-      <label>
-        <div class="muted">类型</div>
-        <select name="kind">
-          <option value="admin" selected>管理员</option>
-          <option value="service">服务</option>
-          <option value="public">公开访问</option>
-        </select>
-      </label>
-      <label>
-        <div class="muted">作用域</div>
-        <input type="text" name="scopes" value="system.read, system.write" />
-      </label>
-      <label>
-        <div class="muted">域名 ID</div>
-        <input type="text" name="domain_ids" placeholder="多个域名 ID 请用逗号分隔" />
-      </label>
-      <label>
-        <div class="muted">邮箱匹配规则</div>
-        <input type="text" name="mailbox_patterns" placeholder="多个邮箱规则请用逗号分隔" />
-      </label>
-      <div class="button-row">
-        <button class="button" type="submit">创建密钥</button>
+
+    <form method="post" action="/admin/api-keys">
+      <div class="form-grid two-up form-section">
+        <label>
+          <span style="color: var(--muted); font-size: 0.9rem;">密钥名称</span>
+          <input type="text" name="name" value="新的 API 密钥" required />
+        </label>
+        
+        <label>
+          <span style="color: var(--muted); font-size: 0.9rem;">类型 (Kind)</span>
+          <select name="kind">
+            <option value="admin" selected>管理员级别 (Admin)</option>
+            <option value="service">服务级别 (Service)</option>
+            <option value="public">公开访问 (Public)</option>
+          </select>
+        </label>
+
+        <label>
+          <span style="color: var(--muted); font-size: 0.9rem;">作用域 (Scopes)</span>
+          <input type="text" name="scopes" value="system.read, system.write" />
+        </label>
+        
+        <label>
+          <span style="color: var(--muted); font-size: 0.9rem;">授权域名 ID</span>
+          <input type="text" name="domain_ids" placeholder="可选：逗号分隔的域名 ID 列表" />
+        </label>
+      </div>
+      
+      <div class="form-section">
+        <label>
+          <span style="color: var(--muted); font-size: 0.9rem;">邮箱匹配规则 (Mailbox Patterns)</span>
+          <input type="text" name="mailbox_patterns" placeholder="可选：逗号分隔的规则，如 *@adb.com" />
+        </label>
+      </div>
+
+      <div class="button-row" style="justify-content: flex-end;">
+        <button class="button button--primary" type="submit" style="padding: 0.75rem 2rem;">生成密钥</button>
       </div>
     </form>
+  </section>
+
+  <section class="card" data-aos="fade-up" data-aos-delay="100" style="margin-top: 2rem;">
+    <div style="margin-bottom: 1.5rem;">
+      <h2 style="margin: 0 0 0.5rem 0;">现有密钥列表</h2>
+    </div>
+
     {% if api_keys %}
       <div class="table-wrap">
         <table class="table">
           <thead>
             <tr>
-              <th>名称</th>
+              <th>名称与前缀</th>
               <th>类型</th>
               <th>状态</th>
               <th>作用域</th>
-              <th>域名授权</th>
-              <th>邮箱授权</th>
+              <th>限制规则</th>
               <th>最近使用</th>
               <th>操作</th>
             </tr>
@@ -73,27 +180,42 @@
               <tr>
                 <td>
                   <div class="stack-meta">
-                    <strong>{{ api_key.name }}</strong>
-                    <span class="muted">{{ api_key.public_id }}</span>
+                    <strong style="color: var(--text);">{{ api_key.name }}</strong>
+                    <span class="muted" style="font-family: monospace; font-size: 0.85rem;">{{ api_key.public_id }}</span>
                   </div>
                 </td>
-                <td>{{ cn_api_key_kind(api_key.kind) }}</td>
+                <td>
+                  <span class="pill pill--neutral" style="font-size: 0.8rem;">{{ cn_api_key_kind(api_key.kind) }}</span>
+                </td>
                 <td>
                   <span class="pill {% if api_key.status == 'active' %}pill--success{% elif api_key.status == 'revoked' %}pill--danger{% else %}pill--neutral{% endif %}">
                     {{ cn_api_key_status(api_key.status) }}
                   </span>
                 </td>
-                <td>{{ api_key.scopes or "无" }}</td>
-                <td>{{ api_key.domain_count }}</td>
-                <td>{{ api_key.mailbox_count }}</td>
-                <td>{{ api_key.last_used_at or "从未使用" }}</td>
+                <td class="muted" style="font-size: 0.85rem;">{{ api_key.scopes or "-" }}</td>
+                <td>
+                  <div class="stack-meta" style="font-size: 0.85rem;">
+                    {% if api_key.domain_count > 0 %}
+                      <span style="color: var(--text);">{{ api_key.domain_count }} 个域名</span>
+                    {% endif %}
+                    {% if api_key.mailbox_count > 0 %}
+                      <span style="color: var(--text);">{{ api_key.mailbox_count }} 条邮箱规则</span>
+                    {% endif %}
+                    {% if api_key.domain_count == 0 and api_key.mailbox_count == 0 %}
+                      <span class="muted">全局 (无限制)</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td class="muted" style="font-size: 0.85rem;">{{ api_key.last_used_at or "从未使用" }}</td>
                 <td>
                   {% if api_key.status == 'active' %}
-                    <form method="post" action="/admin/api-keys/{{ api_key.id }}/revoke">
-                      <button class="button button--ghost" type="submit">吊销</button>
+                    <form method="post" action="/admin/api-keys/{{ api_key.id }}/revoke" style="margin: 0;">
+                      <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+                      <input type="hidden" name="offset" value="{{ pagination.offset }}" />
+                      <button class="button button--danger" type="submit" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">吊销</button>
                     </form>
                   {% else %}
-                    <span class="muted">无需操作</span>
+                    <span class="muted" style="font-size: 0.85rem;">已失效</span>
                   {% endif %}
                 </td>
               </tr>
@@ -101,8 +223,23 @@
           </tbody>
         </table>
       </div>
+      <div class="pagination-panel">
+        <div class="pagination-summary">
+          当前第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页，显示 {{ pagination.start_index }} - {{ pagination.end_index }}，共 {{ pagination.total_count }} 个密钥
+        </div>
+        <div class="pagination-nav">
+          {% if pagination.has_previous %}
+            <a class="button button--ghost" href="{{ pagination.previous_page_url | safe }}">上一页</a>
+          {% endif %}
+          {% if pagination.has_next %}
+            <a class="button button--ghost" href="{{ pagination.next_page_url | safe }}">下一页</a>
+          {% endif %}
+        </div>
+      </div>
     {% else %}
-      <div class="empty-state">还没有 API 密钥。</div>
+      <div class="empty-state">
+        <p>还没有创建任何 API 密钥</p>
+      </div>
     {% endif %}
   </section>
 {% endblock %}

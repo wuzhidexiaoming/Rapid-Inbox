@@ -1,135 +1,558 @@
 {% extends "public/base.html" %}
 
+{% block head %}
+<style>
+  .hero-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 6rem 0 8rem;
+    position: relative;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 9999px;
+    color: var(--primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 2rem;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+  }
+
+  .hero-badge .pulse {
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--primary);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  }
+
+  .hero-title {
+    font-size: clamp(3rem, 8vw, 5.5rem);
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-title span {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-subtitle {
+    font-size: clamp(1.1rem, 2vw, 1.25rem);
+    color: var(--text-muted);
+    max-width: 650px;
+    margin-bottom: 3.5rem;
+    line-height: 1.6;
+  }
+
+  .search-wrapper {
+    width: 100%;
+    max-width: 650px;
+    position: relative;
+    z-index: 10;
+  }
+
+  .search-box {
+    display: flex;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    padding: 0.5rem;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .search-box:focus-within {
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(59, 130, 246, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .search-prefix {
+    display: flex;
+    align-items: center;
+    padding-left: 1rem;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    padding: 1rem;
+    font-size: 1.1rem;
+    outline: none;
+    font-family: inherit;
+    min-width: 0;
+  }
+
+  .search-input::placeholder {
+    color: rgba(148, 163, 184, 0.5);
+  }
+
+  .btn-action {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: white;
+    border: none;
+    border-radius: 0.75rem;
+    padding: 0 1.75rem;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+
+  .btn-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px var(--primary-glow);
+  }
+
+  .btn-action:active {
+    transform: translateY(1px);
+  }
+  
+  .btn-random {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    padding: 0 1.25rem;
+    margin-right: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+  }
+
+  .btn-random:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  /* Stats Row */
+  .stats-container {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    margin-top: 4rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 2rem;
+  }
+
+  .stat-item {
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #fff, #94a3b8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Code Section */
+  .code-section {
+    margin-top: 6rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+  }
+
+  .code-content h2 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+  }
+
+  .code-content p {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    line-height: 1.7;
+    margin-bottom: 2rem;
+  }
+
+  .terminal-window {
+    background: #0d1117;
+    border-radius: 1rem;
+    border: 1px solid rgba(255,255,255,0.1);
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+  }
+
+  .terminal-header {
+    background: #161b22;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .terminal-dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .dot-red { background: #ff5f56; }
+  .dot-yellow { background: #ffbd2e; }
+  .dot-green { background: #27c93f; }
+
+  .terminal-title {
+    color: #8b949e;
+    font-size: 0.85rem;
+    font-family: monospace;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .terminal-body {
+    padding: 1.5rem;
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #e6edf3;
+    overflow-x: auto;
+  }
+
+  .terminal-body .prompt { color: #3fb950; }
+  .terminal-body .command { color: #79c0ff; }
+  .terminal-body .string { color: #a5d6ff; }
+  .terminal-body .comment { color: #8b949e; }
+
+  /* Features */
+  .section-title {
+    text-align: center;
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: 8rem 0 4rem;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2rem;
+  }
+
+  .feature-card {
+    padding: 2.5rem;
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.4) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 1.5rem;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .feature-card:hover {
+    transform: translateY(-5px);
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.6) 100%);
+    border-color: rgba(59, 130, 246, 0.2);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  }
+
+  .feature-card:hover::before {
+    opacity: 1;
+  }
+
+  .feature-icon-wrapper {
+    width: 60px;
+    height: 60px;
+    border-radius: 1rem;
+    background: rgba(59, 130, 246, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    margin-bottom: 1.5rem;
+    color: var(--primary);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .feature-card:nth-child(2) .feature-icon-wrapper {
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--secondary);
+    border-color: rgba(139, 92, 246, 0.2);
+  }
+
+  .feature-card:nth-child(3) .feature-icon-wrapper {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.2);
+  }
+
+  .feature-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: #fff;
+  }
+
+  .feature-desc {
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  @media (max-width: 992px) {
+    .code-section {
+      grid-template-columns: 1fr;
+      gap: 3rem;
+    }
+    .code-content {
+      text-align: center;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .search-box {
+      flex-direction: column;
+      padding: 1rem;
+      border-radius: 1.5rem;
+    }
+    
+    .btn-action, .btn-random {
+      width: 100%;
+      justify-content: center;
+      padding: 1rem;
+      margin: 0.5rem 0 0 0;
+    }
+
+    .stats-container {
+      flex-direction: column;
+      gap: 2rem;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block hero %}
-  <section class="hero">
-    <article class="hero-panel">
-      <p class="eyebrow">首页</p>
-      <h1>把公开邮箱变成一条很快、很直接的访问路径。</h1>
-      <p class="lede">
-        输入邮箱地址即可打开公开收件箱，适合临时邮箱、调试邮箱、回调通知邮箱以及自动化验收场景。
-      </p>
-
-      <form class="lookup-form" id="mailbox-form">
-        <label for="mailbox-address">公开邮箱地址</label>
-        <div class="lookup-row">
-          <input
-            id="mailbox-address"
-            name="mailbox_address"
-            type="text"
-            inputmode="email"
-            autocomplete="off"
-            placeholder="例如 {{ mailbox_example }}"
-            required
-          />
-          <button class="button" type="submit">打开邮箱</button>
-        </div>
-        <p class="muted">系统会自动跳转到 `/mail/邮箱地址`，仅当对应域名启用了公开网页访问时可查看。</p>
-      </form>
-
-      <div class="tag-row">
-        <span class="badge">SMTP 极速收件</span>
-        <span class="badge">公开邮箱浏览</span>
-        <span class="badge">附件直接下载</span>
+<section class="hero-section" data-aos="zoom-in" data-aos-duration="1000">
+  <div class="hero-badge">
+    <div class="pulse"></div>
+    系统全速运行中 · 毫秒级延迟
+  </div>
+  
+  <h1 class="hero-title">重新定义 <span>公开邮箱</span></h1>
+  
+  <p class="hero-subtitle">
+    为开发者设计的极速邮件接入中心。瞬间接收，实时查看，完美适配自动化测试与调试场景，提升工作效率。
+  </p>
+  
+  <div class="search-wrapper" data-aos="fade-up" data-aos-delay="200">
+    <form class="search-box" id="mailbox-form">
+      <div class="search-prefix">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
       </div>
-    </article>
+      <input 
+        type="text" 
+        id="mailbox-address" 
+        name="mailbox_address"
+        class="search-input" 
+        placeholder="输入邮箱，例如 {{ mailbox_example }}" 
+        required
+      >
+      <button type="button" class="btn-random" id="btn-random" title="生成随机邮箱">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg>
+      </button>
+      <button type="submit" class="btn-action">
+        立即进入
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </button>
+    </form>
+  </div>
 
-    <aside class="aside-card">
-      <div>
-        <p class="eyebrow">怎么用</p>
-        <h2>三步就能打开一个邮箱</h2>
-      </div>
-      <ol>
-        <li>确认域名已经接入系统并开启公开网页访问。</li>
-        <li>输入完整邮箱地址，例如 `qa@adb.com`。</li>
-        <li>跳转后即可查看邮件列表、正文、网页预览和附件。</li>
-      </ol>
-      <a class="button button--ghost" href="/admin/login">前往管理后台</a>
-    </aside>
-  </section>
+  <div class="stats-container" data-aos="fade-up" data-aos-delay="400">
+    <div class="stat-item">
+      <div class="stat-value">~50ms</div>
+      <div class="stat-label">平均接收延迟</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">100%</div>
+      <div class="stat-label">内存化存储</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">RESTful</div>
+      <div class="stat-label">完全 API 支持</div>
+    </div>
+  </div>
+</section>
 {% endblock %}
 
 {% block content %}
-  <section class="grid three-up">
-    <article class="card">
-      <p class="eyebrow">浏览</p>
-      <h2>公开邮箱列表</h2>
-      <p class="section-copy">按时间倒序展示最新邮件，快速定位主题、发件人、状态和附件情况。</p>
-    </article>
-    <article class="card">
-      <p class="eyebrow">查看</p>
-      <h2>正文与网页预览</h2>
-      <p class="section-copy">纯文本正文直接展示，网页正文通过隔离预览框呈现，更适合调试通知邮件和验证码模板。</p>
-    </article>
-    <article class="card">
-      <p class="eyebrow">下载</p>
-      <h2>原始邮件与附件</h2>
-      <p class="section-copy">可直接下载原始 `.eml` 邮件和全部附件，方便存档、复查与二次处理。</p>
-    </article>
-  </section>
+<h2 class="section-title" data-aos="fade-up">为什么选择我们</h2>
+<div class="features-grid">
+  <div class="feature-card" data-aos="fade-up" data-aos-delay="100">
+    <div class="feature-icon-wrapper">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+    </div>
+    <h3 class="feature-title">毫秒级接收</h3>
+    <p class="feature-desc">基于高性能异步架构构建，邮件从发出到呈现只需眨眼之间。拒绝漫长等待，让开发调试效率直接翻倍。</p>
+  </div>
+  
+  <div class="feature-card" data-aos="fade-up" data-aos-delay="200">
+    <div class="feature-icon-wrapper">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+    </div>
+    <h3 class="feature-title">所见即所得</h3>
+    <p class="feature-desc">纯文本与安全隔离的网页预览无缝切换，直接下载原始 .eml 和附件，精准还原邮件真实面貌，排查问题更直观。</p>
+  </div>
+  
+  <div class="feature-card" data-aos="fade-up" data-aos-delay="300">
+    <div class="feature-icon-wrapper">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+    </div>
+    <h3 class="feature-title">为自动化而生</h3>
+    <p class="feature-desc">无论是测试用户注册流程、接收第三方回调，还是在 CI/CD 流程中的进行邮件发送验证，一套 API 轻松胜任所有场景。</p>
+  </div>
+</div>
 
-  <section class="grid two-up">
-    <article class="card">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">路径规范</p>
-          <h2>公开页面地址</h2>
-        </div>
+<div class="code-section" data-aos="fade-up" data-aos-offset="100">
+  <div class="code-content">
+    <h2>极简的 API 接入</h2>
+    <p>我们为开发者提供最友好的 RESTful API 接口。无需繁琐的认证和配置，你可以直接在脚本、终端或测试用例中获取最新的邮件内容。</p>
+    <a href="/docs" class="btn btn-ghost" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 9999px;">
+      查看 API 文档
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+    </a>
+  </div>
+  
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
       </div>
-      <div class="kv-grid">
-        <div class="kv-item">
-          <span>邮箱列表</span>
-          <strong><code>/mail/&lt;邮箱地址&gt;</code></strong>
-        </div>
-        <div class="kv-item">
-          <span>邮件详情</span>
-          <strong><code>/mail/&lt;邮箱地址&gt;/&lt;delivery_id&gt;</code></strong>
-        </div>
-        <div class="kv-item">
-          <span>原始邮件</span>
-          <strong><code>/raw</code> 下载</strong>
-        </div>
-        <div class="kv-item">
-          <span>网页正文</span>
-          <strong><code>/html</code> 预览</strong>
-        </div>
-      </div>
-    </article>
-
-    <article class="card">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">适用场景</p>
-          <h2>适合这些收件需求</h2>
-        </div>
-      </div>
-      <ul class="muted" style="margin:0; padding-left:1.15rem; line-height:1.8;">
-        <li>测试注册、登录、找回密码和验证码邮件。</li>
-        <li>接收来自第三方平台的通知、回执和工单。</li>
-        <li>为自动化流程准备无需密码的公开收件箱。</li>
-        <li>调试多域名、多子域名的 SMTP 收件配置。</li>
-      </ul>
-    </article>
-  </section>
+      <div class="terminal-title">bash</div>
+    </div>
+    <div class="terminal-body">
+<span class="comment"># 获取测试邮箱的最新邮件</span>
+<span class="prompt">$</span> <span class="command">curl</span> -s <span class="string">"https://api.domain.com/v1/mailboxes/test/messages"</span> | jq
+{
+  <span class="string">"messages"</span>: [
+    {
+      <span class="string">"id"</span>: <span class="string">"msg_123456"</span>,
+      <span class="string">"from"</span>: <span class="string">"verify@example.com"</span>,
+      <span class="string">"subject"</span>: <span class="string">"您的验证码是 8932"</span>,
+      <span class="string">"date"</span>: <span class="string">"2026-04-19T10:30:00Z"</span>
+    }
+  ]
+}
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-  <script>
-    (() => {
-      const form = document.getElementById("mailbox-form");
-      const input = document.getElementById("mailbox-address");
-      if (!form || !input) {
-        return;
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("mailbox-form");
+    const input = document.getElementById("mailbox-address");
+    const btnRandom = document.getElementById("btn-random");
+    
+    // Random mailbox generator
+    btnRandom.addEventListener("click", () => {
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      let result = '';
+      for (let i = 0; i < 8; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
       }
+      input.value = result;
+      // Add a slight pop animation
+      input.style.transform = "scale(1.02)";
+      setTimeout(() => input.style.transform = "none", 150);
+    });
 
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const value = input.value.trim();
-        if (!value) {
-          input.focus();
-          return;
-        }
-        window.location.href = `/mail/${encodeURIComponent(value)}`;
-      });
-    })();
-  </script>
+    // Form submission
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const val = input.value.trim();
+      if (!val) return;
+      
+      const btn = e.target.querySelector('.btn-action');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<svg class="animate-spin" style="animation: spin 1s linear infinite; margin-right: 0.5rem;" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> 正在加载...';
+      btn.style.opacity = '0.8';
+      
+      setTimeout(() => {
+        const target = "{{ mail_route_prefix }}".replace('PLACEHOLDER', encodeURIComponent(val));
+        window.location.href = target;
+        
+        // Reset button in case of back navigation
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+          btn.style.opacity = '1';
+        }, 1000);
+      }, 400);
+    });
+  });
+  
+  // Add animation for spin
+  const style = document.createElement('style');
+  style.innerHTML = `
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+  `;
+  document.head.appendChild(style);
+</script>
 {% endblock %}

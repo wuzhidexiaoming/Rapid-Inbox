@@ -8,7 +8,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 from app.auth.permissions import PermissionContext
-from app.http.sse import LIVE_SSE_EVENT_TYPES, recent_smtp_sessions, smtp_live_snapshot, stream_smtp_live_events
+from app.http.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, build_pagination_context
+from app.http.sse import (
+    LIVE_SSE_EVENT_TYPES,
+    count_smtp_sessions,
+    recent_smtp_sessions,
+    smtp_live_snapshot,
+    stream_smtp_live_events,
+)
 from app.ingest.storage import utc_now
 from app.services.dns_check import DnsCheckService
 
@@ -174,14 +181,19 @@ async def require_admin_live_access(
 
 
 @router.get("/admin/live", response_class=HTMLResponse)
-async def live_page(request: Request) -> Response:
+async def live_page(
+    request: Request,
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> Response:
     admin = await _current_admin_session(request)
     if admin is None:
         raise HTTPException(status_code=404, detail="live page not found")
 
     runtime = request.app.state.runtime
     live_events, live_cursor = runtime.live_state.snapshot_state()
-    initial_events = live_events or smtp_live_snapshot(runtime)
+    initial_events = live_events[-DEFAULT_PAGE_SIZE:] if live_events else smtp_live_snapshot(runtime, history_limit=DEFAULT_PAGE_SIZE)
+    sessions = recent_smtp_sessions(runtime, limit=limit, offset=offset)
     return _render_template(
         request,
         "admin/live.html",
@@ -189,9 +201,17 @@ async def live_page(request: Request) -> Response:
             "page_title": "实时活动",
             "admin": admin,
             "events": initial_events,
-            "sessions": recent_smtp_sessions(runtime),
+            "sessions": sessions,
             "stream_url": f"/api/v1/admin/live/smtp/stream?after_cursor={live_cursor}",
             "live_event_types": LIVE_SSE_EVENT_TYPES,
+            "stream_item_limit": DEFAULT_PAGE_SIZE,
+            "sessions_pagination": build_pagination_context(
+                path="/admin/live",
+                limit=limit,
+                offset=offset,
+                total_count=count_smtp_sessions(runtime),
+                item_count=len(sessions),
+            ),
         },
     )
 

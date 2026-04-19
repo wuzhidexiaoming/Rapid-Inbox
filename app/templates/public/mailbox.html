@@ -1,73 +1,136 @@
 {% extends "public/base.html" %}
 
-{% block hero %}
-  <section class="hero hero--compact">
-    <article class="hero-panel">
-      <p class="eyebrow">公开邮箱</p>
-      <h1>{{ mailbox_address }}</h1>
-      <p class="lede">邮件列表按接收时间倒序排列，你可以直接进入详情页查看正文、网页预览和附件。</p>
-      <div class="tag-row">
-        <span class="badge">共 {{ message_count }} 封邮件</span>
-        {% if items %}
-          <span class="badge">当前显示 {{ start_index }} - {{ end_index }}</span>
-        {% else %}
-          <span class="badge">暂无可展示内容</span>
-        {% endif %}
-      </div>
-    </article>
-
-    <aside class="aside-card">
-      <div>
-        <p class="eyebrow">快速操作</p>
-        <h2>继续浏览</h2>
-      </div>
-      <p class="muted">如果这是一个公开邮箱，你可以把当前地址分享给需要查看邮件的人。</p>
-      <div class="button-row">
-        <a class="button button--ghost" href="/">返回首页</a>
-      </div>
-    </aside>
-  </section>
+{% block head %}
+<style>
+  .mailbox-header {
+    margin-bottom: 3rem;
+  }
+  
+  .mailbox-title {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    margin-bottom: 1rem;
+    word-break: break-all;
+    background: linear-gradient(135deg, #ffffff, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .mailbox-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  
+  .action-bar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  
+  .mail-item-link {
+    text-decoration: none;
+    display: block;
+    margin-bottom: 1rem;
+  }
+  
+  .status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    border: 1px solid transparent;
+  }
+  
+  .status-parsed { color: #10b981; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); }
+  .status-failed { color: #ef4444; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); }
+  .status-pending { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
+  
+  .pagination {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 3rem;
+  }
+</style>
 {% endblock %}
 
 {% block content %}
+<div data-aos="fade-up" data-aos-duration="600">
+  <div class="mailbox-header">
+    <div class="action-bar">
+      <a href="/" class="btn btn-ghost" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+        ← 返回首页
+      </a>
+    </div>
+    
+    <div class="badge" style="margin-bottom: 1rem;">公开收件箱</div>
+    <h1 class="mailbox-title">{{ mailbox_address }}</h1>
+    
+    <div class="mailbox-meta">
+      <span class="text-muted" style="font-size: 1.1rem;">共包含 <strong>{{ message_count }}</strong> 封邮件</span>
+      {% if items %}
+        <span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text-muted); border-color: rgba(255,255,255,0.1);">
+          当前显示 {{ start_index }} - {{ end_index }}
+        </span>
+        <span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text-muted); border-color: rgba(255,255,255,0.1);">
+          第 {{ current_page }} / {{ total_pages }} 页，每页 {{ limit }} 封
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
   {% if items %}
-    <section class="mail-list" aria-label="邮箱邮件列表">
+    <div class="mail-list">
       {% for item in items %}
-        <a class="mail-item" href="/mail/{{ mailbox_address }}/{{ item.delivery_id }}">
-          <div class="mail-head">
-            <strong>{{ item.subject or "（解析中）" }}</strong>
-            <span
-              class="pill {% if item.parse_status == 'parsed' %}pill--success{% elif item.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}"
-            >
-              {{ cn_parse_status(item.parse_status) }}
-            </span>
-          </div>
-          <div class="mail-meta">
-            <span class="muted">{{ item.from_addr or "未知发件人" }}</span>
-            <span class="muted">{{ item.delivered_at }}</span>
-          </div>
-          <div class="tag-row" style="margin-top:0;">
-            <span class="badge">投递编号：{{ item.delivery_id }}</span>
-            {% if item.has_attachments %}
-              <span class="badge">包含附件</span>
-            {% endif %}
+        <a href="/mail/{{ mailbox_address }}/{{ item.delivery_id }}" class="mail-item-link" data-aos="fade-up" data-aos-delay="{{ loop.index0 * 50 }}">
+          <div class="mail-item">
+            <div class="mail-head">
+              <strong style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;">
+                {{ item.subject or "（无主题）" }}
+              </strong>
+              <span class="status-badge {% if item.parse_status == 'parsed' %}status-parsed{% elif item.parse_status == 'failed' %}status-failed{% else %}status-pending{% endif %}">
+                {{ cn_parse_status(item.parse_status) }}
+              </span>
+            </div>
+            
+            <div class="mail-meta" style="margin-bottom: 1rem;">
+              <span>发件人: {{ item.from_addr or "未知" }}</span>
+              <span>{{ item.delivered_at }}</span>
+            </div>
+            
+            <div class="tag-row">
+              <span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text-muted); border: none; font-size: 0.75rem;">
+                ID: {{ item.delivery_id }}
+              </span>
+              {% if item.has_attachments %}
+                <span class="badge badge-success" style="font-size: 0.75rem;">📎 包含附件</span>
+              {% endif %}
+            </div>
           </div>
         </a>
       {% endfor %}
-    </section>
+    </div>
 
-    <nav class="pager" aria-label="邮箱分页">
+    <div class="pagination" data-aos="fade-up" data-aos-delay="200">
       {% if has_previous %}
-        <a class="button button--ghost" href="{{ previous_page_url | safe }}">较新的邮件</a>
+        <a class="btn btn-ghost" href="{{ previous_page_url | safe }}">← 较新的邮件</a>
       {% endif %}
+      <span class="text-muted" style="display:flex; align-items:center;">最近 {{ limit }} 封 / 共 {{ message_count }} 封</span>
       {% if has_next %}
-        <a class="button button--ghost" href="{{ next_page_url | safe }}">更早的邮件</a>
+        <a class="btn btn-ghost" href="{{ next_page_url | safe }}">更早的邮件 →</a>
       {% endif %}
-    </nav>
+    </div>
   {% else %}
-    <section class="empty-state">
-      <strong>这个邮箱还没有邮件。</strong>
-      <p class="muted">只要域名由系统托管，邮箱地址首次访问时也会被自动建立为可浏览的公开邮箱。</p>
-    </section>
+    <div class="empty-state" data-aos="zoom-in" data-aos-delay="100">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+      <h3 style="margin-bottom: 0.5rem; font-size: 1.5rem;">这个邮箱还没有收到邮件</h3>
+      <p class="text-muted" style="max-width: 400px; margin: 0 auto;">
+        向此地址发送邮件后，刷新页面即可查看。如果是第一次访问，该邮箱已被自动注册为可浏览的公开邮箱。
+      </p>
+    </div>
   {% endif %}
+</div>
 {% endblock %}

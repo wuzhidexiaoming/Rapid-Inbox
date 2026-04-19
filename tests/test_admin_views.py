@@ -1,10 +1,24 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from itertools import count
 import re
 
 import pytest
 
 from app.db.connection import connect_database
+import app.runtime as runtime_module
+
+
+def _patch_sequenced_utc_now(monkeypatch) -> None:
+    base = datetime(2026, 4, 18, 20, 0, 0, tzinfo=UTC)
+    ticks = count()
+
+    monkeypatch.setattr(
+        runtime_module,
+        "utc_now",
+        lambda: (base + timedelta(seconds=next(ticks))).isoformat().replace("+00:00", "Z"),
+    )
 
 
 @pytest.mark.asyncio
@@ -16,8 +30,8 @@ async def test_admin_login_and_dashboard_page_flow(app_client, runtime) -> None:
     )
 
     assert response.status_code == 200
-    assert "邮件接入与运维中心" in response.text
-    assert "域名" in response.text
+    assert "高效、优雅的域名与邮件管控平台" in response.text
+    assert "域名管理" in response.text
     assert 'href="/admin/live"' in response.text
 
 
@@ -81,7 +95,7 @@ async def test_admin_live_page_uses_cursor_based_stream_url(app_client, runtime)
     response = await app_client.get("/admin/live")
 
     assert response.status_code == 200
-    assert "实时收件活动" in response.text
+    assert "实时监控中枢" in response.text
     assert "after_cursor=" in response.text
 
 
@@ -158,7 +172,7 @@ async def test_admin_mailboxes_page_can_toggle_visibility_via_form(app_client, r
 
     assert login.status_code == 200
     assert response.status_code == 303
-    assert response.headers["location"] == "/admin/mailboxes"
+    assert response.headers["location"] == "/admin/mailboxes?limit=20&offset=0"
     assert updated["public_enabled"] is False
     assert updated["is_hidden"] is True
 
@@ -217,3 +231,149 @@ async def test_admin_api_keys_page_can_create_and_revoke_via_form(app_client, ru
     assert revoked.status_code == 200
     assert after["status"] == "revoked"
     assert denied.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_mailboxes_page_paginates_results(app_client, runtime, monkeypatch) -> None:
+    _patch_sequenced_utc_now(monkeypatch)
+
+    await runtime.create_domain("adb.com")
+    for index in range(21):
+        await runtime.accept_message(
+            rcpt_tos=[f"user{index:02d}@adb.com"],
+            envelope_from="sender@example.com",
+            content=(
+                "From: Sender <sender@example.com>\r\n"
+                f"To: User <user{index:02d}@adb.com>\r\n"
+                f"Subject: Mailbox {index:02d}\r\n"
+                f"Message-ID: <mailbox-{index:02d}@example.com>\r\n"
+                "Date: Sat, 18 Apr 2026 20:00:00 +0000\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: text/plain; charset=utf-8\r\n"
+                "\r\n"
+                "Mailbox pagination test\r\n"
+            ).encode("utf-8"),
+        )
+    await runtime.drain_parser_queue()
+
+    await app_client.post(
+        "/admin/login",
+        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
+        follow_redirects=True,
+    )
+    response = await app_client.get("/admin/mailboxes")
+
+    assert response.status_code == 200
+    assert "?limit=20&offset=20" in response.text
+    assert "user20@adb.com" in response.text
+    assert "user00@adb.com" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_admin_messages_page_paginates_results(app_client, runtime, monkeypatch) -> None:
+    _patch_sequenced_utc_now(monkeypatch)
+
+    await runtime.create_domain("adb.com")
+    for index in range(21):
+        await runtime.accept_message(
+            rcpt_tos=["foo@adb.com"],
+            envelope_from="sender@example.com",
+            content=(
+                "From: Sender <sender@example.com>\r\n"
+                "To: Foo <foo@adb.com>\r\n"
+                f"Subject: Message {index:02d}\r\n"
+                f"Message-ID: <message-{index:02d}@example.com>\r\n"
+                "Date: Sat, 18 Apr 2026 20:00:00 +0000\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: text/plain; charset=utf-8\r\n"
+                "\r\n"
+                "Messages pagination test\r\n"
+            ).encode("utf-8"),
+        )
+    await runtime.drain_parser_queue()
+
+    await app_client.post(
+        "/admin/login",
+        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
+        follow_redirects=True,
+    )
+    response = await app_client.get("/admin/messages")
+
+    assert response.status_code == 200
+    assert "?limit=20&offset=20" in response.text
+    assert "Message 20" in response.text
+    assert "Message 00" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_admin_api_keys_and_audit_pages_paginate_results(app_client, runtime) -> None:
+    for index in range(21):
+        await runtime.api_keys.create_key(
+            name=f"paged-key-{index:02d}",
+            kind="admin",
+            scopes=["domains.read"],
+            domain_ids=[],
+            mailbox_patterns=[],
+        )
+        await runtime.audit.log(
+            "admin",
+            "fixture",
+            f"fixture.action.{index:02d}",
+            "system_settings",
+            None,
+            "success",
+        )
+
+    await app_client.post(
+        "/admin/login",
+        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
+        follow_redirects=True,
+    )
+    api_keys_response = await app_client.get("/admin/api-keys")
+    audit_response = await app_client.get("/admin/audit")
+
+    assert api_keys_response.status_code == 200
+    assert "?limit=20&offset=20" in api_keys_response.text
+    assert "paged-key-20" in api_keys_response.text
+    assert "paged-key-00" not in api_keys_response.text
+
+    assert audit_response.status_code == 200
+    assert "?limit=20&offset=20" in audit_response.text
+    assert "fixture.action.20" in audit_response.text
+    assert "fixture.action.00" not in audit_response.text
+
+
+@pytest.mark.asyncio
+async def test_admin_live_page_limits_stream_items_and_paginates_sessions(app_client, runtime, monkeypatch) -> None:
+    _patch_sequenced_utc_now(monkeypatch)
+
+    for index in range(21):
+        session_id = f"smtp_session_{index:02d}"
+        await runtime.ensure_smtp_session(
+            session_id,
+            type("Session", (), {"peer": ("127.0.0.1", 2500 + index), "host_name": f"mx{index:02d}", "ssl": None})(),
+        )
+        await runtime.close_smtp_session(session_id, status="closed", close_reason="fixture")
+
+    for index in range(25):
+        await runtime.live_state.publish(
+            {
+                "type": "queued" if index % 2 else "rcpt_accepted",
+                "ts": f"2026-04-18T20:00:{index:02d}Z",
+                "session_id": f"smtp_session_{index:02d}",
+                "message_id": f"msg_{index:02d}",
+            }
+        )
+
+    await app_client.post(
+        "/admin/login",
+        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
+        follow_redirects=True,
+    )
+    response = await app_client.get("/admin/live")
+
+    assert response.status_code == 200
+    assert response.text.count('data-event-type="') == 20
+    assert "?limit=20&offset=20" in response.text
+    assert "smtp_session_20" in response.text
+    assert "smtp_session_00" not in response.text

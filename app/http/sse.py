@@ -23,7 +23,7 @@ def encode_sse(event: dict[str, object], *, event_id: str | None = None) -> str:
 def smtp_live_snapshot(runtime, *, history_limit: int = 25) -> list[dict[str, Any]]:
     events, _ = runtime.live_state.snapshot_state()
     if events:
-        return events
+        return events[-history_limit:]
     return _recent_message_events(runtime, limit=history_limit)
 
 
@@ -86,7 +86,13 @@ async def stream_smtp_live_events(
         await asyncio.sleep(poll_interval)
 
 
-def recent_smtp_sessions(runtime, *, limit: int = 25) -> list[dict[str, Any]]:
+def count_smtp_sessions(runtime) -> int:
+    with connect_database(runtime.settings.database_path) as connection:
+        row = connection.execute("SELECT COUNT(*) AS count FROM smtp_sessions").fetchone()
+    return 0 if row is None else int(row["count"])
+
+
+def recent_smtp_sessions(runtime, *, limit: int = 25, offset: int = 0) -> list[dict[str, Any]]:
     with connect_database(runtime.settings.database_path) as connection:
         rows = connection.execute(
             """
@@ -112,9 +118,9 @@ def recent_smtp_sessions(runtime, *, limit: int = 25) -> list[dict[str, Any]]:
                 close_reason
             FROM smtp_sessions
             ORDER BY connect_at DESC, id DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (limit,),
+            (limit, offset),
         ).fetchall()
 
     sessions: list[dict[str, Any]] = []

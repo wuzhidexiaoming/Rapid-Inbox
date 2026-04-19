@@ -1,55 +1,106 @@
 {% extends "admin/base.html" %}
 
+{% block head %}
+<style>
+  .form-grid {
+    display: grid;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  
+  .two-up {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  
+  .inline-check {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+  
+  .inline-check:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--primary);
+  }
+  
+  .inline-check input[type="checkbox"] {
+    width: 1.2rem;
+    height: 1.2rem;
+    margin: 0;
+    accent-color: var(--primary);
+  }
+  
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+  
+  .form-section {
+    margin-bottom: 2rem;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
   {% if create_error %}
-    <div class="notice notice--error">{{ create_error }}</div>
+    <div class="notice" data-aos="fade-down">{{ create_error }}</div>
   {% endif %}
 
-  <section class="card card--accent">
-    <div class="section-title">
-      <div>
-        <p class="eyebrow">新建域名</p>
-        <h2>直接在后台接入可收件域名</h2>
-        <p class="section-copy">提交后域名会立即进入系统规则，可用于 SMTP 收件、公开邮箱浏览和 API 查询。</p>
-      </div>
+  <!-- 域名创建卡片 -->
+  <section class="card" data-aos="fade-up">
+    <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
+      <h2 style="margin: 0 0 0.5rem 0;">新增域名</h2>
+      <p class="muted" style="margin: 0; font-size: 0.95rem;">提交后域名会立即进入系统规则，可用于 SMTP 收件、公开邮箱浏览和 API 查询。</p>
     </div>
 
-    <form method="post" action="/admin/domains" class="form-grid two-up">
-      <label>
-        <span>根域名</span>
-        <input
-          type="text"
-          name="root_domain"
-          value="{{ create_form.root_domain }}"
-          placeholder="例如 adb.com"
-          autocomplete="off"
-          required
-        />
-      </label>
+    <form method="post" action="/admin/domains">
+      <div class="form-grid two-up form-section">
+        <label>
+          <span style="color: var(--muted); font-size: 0.9rem;">根域名</span>
+          <input
+            type="text"
+            name="root_domain"
+            value="{{ create_form.root_domain }}"
+            placeholder="例如 adb.com"
+            autocomplete="off"
+            required
+          />
+        </label>
 
-      <label>
-        <span>最大邮件大小（字节）</span>
-        <input
-          type="number"
-          min="1"
-          step="1"
-          name="max_message_size_bytes"
-          value="{{ create_form.max_message_size_bytes }}"
-          required
-        />
-      </label>
+        <label>
+          <span style="color: var(--muted); font-size: 0.9rem;">最大邮件大小（字节）</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            name="max_message_size_bytes"
+            value="{{ create_form.max_message_size_bytes }}"
+            required
+          />
+        </label>
 
-      <label>
-        <span>加号寻址策略</span>
-        <select name="plus_addressing_mode">
-          <option value="keep" {% if create_form.plus_addressing_mode == "keep" %}selected{% endif %}>保留原样</option>
-          <option value="strip" {% if create_form.plus_addressing_mode == "strip" %}selected{% endif %}>去除加号标签</option>
-        </select>
-      </label>
+        <label>
+          <span style="color: var(--muted); font-size: 0.9rem;">加号寻址策略</span>
+          <select name="plus_addressing_mode">
+            <option value="keep" {% if create_form.plus_addressing_mode == "keep" %}selected{% endif %}>保留原样</option>
+            <option value="strip" {% if create_form.plus_addressing_mode == "strip" %}selected{% endif %}>去除加号标签</option>
+          </select>
+        </label>
+      </div>
 
-      <div class="stack-meta">
-        <span class="muted">接收与公开开关</span>
-        <div class="button-row">
+      <div class="form-section">
+        <span style="display: block; color: var(--muted); font-size: 0.9rem; margin-bottom: 0.5rem;">接收规则与公开开关</span>
+        <div class="checkbox-grid">
           <label class="inline-check">
             <input type="hidden" name="accept_exact" value="0" />
             <input type="checkbox" name="accept_exact" value="1" {% if create_form.accept_exact %}checked{% endif %} />
@@ -63,12 +114,12 @@
           <label class="inline-check">
             <input type="hidden" name="public_web_enabled" value="0" />
             <input type="checkbox" name="public_web_enabled" value="1" {% if create_form.public_web_enabled %}checked{% endif %} />
-            开启公开网页访问
+            开启公开网页
           </label>
           <label class="inline-check">
             <input type="hidden" name="public_api_enabled" value="0" />
             <input type="checkbox" name="public_api_enabled" value="1" {% if create_form.public_api_enabled %}checked{% endif %} />
-            开启公开接口访问
+            开启公开接口
           </label>
           <label class="inline-check">
             <input type="hidden" name="local_part_case_sensitive" value="0" />
@@ -78,9 +129,9 @@
               value="1"
               {% if create_form.local_part_case_sensitive %}checked{% endif %}
             />
-            本地部分区分大小写
+            区分大小写
           </label>
-          <label class="inline-check">
+          <label class="inline-check" style="border-color: rgba(16, 185, 129, 0.3);">
             <input type="hidden" name="is_active" value="0" />
             <input type="checkbox" name="is_active" value="1" {% if create_form.is_active %}checked{% endif %} />
             创建后立即启用
@@ -88,20 +139,19 @@
         </div>
       </div>
 
-      <div class="button-row">
-        <button class="button" type="submit">创建域名</button>
+      <div class="button-row" style="margin-top: 1.5rem; justify-content: flex-end;">
+        <button class="button button--primary" type="submit" style="padding: 0.75rem 2rem;">创建域名</button>
       </div>
     </form>
   </section>
 
-  <section class="card">
-    <div class="section-title">
-      <div>
-        <p class="eyebrow">域名</p>
-        <h2>已接入的域名列表</h2>
-        <p class="section-copy">这里展示域名的收件能力、公开访问开关以及最近更新时间。</p>
-      </div>
+  <!-- 域名列表卡片 -->
+  <section class="card" data-aos="fade-up" data-aos-delay="200" style="margin-top: 2rem;">
+    <div style="margin-bottom: 1.5rem;">
+      <h2 style="margin: 0 0 0.5rem 0;">已接入域名列表</h2>
+      <p class="muted" style="margin: 0; font-size: 0.95rem;">展示域名的收件能力、公开访问开关以及最近更新状态。</p>
     </div>
+    
     {% if domains %}
       <div class="table-wrap">
         <table class="table">
@@ -109,36 +159,48 @@
             <tr>
               <th>域名</th>
               <th>状态</th>
-              <th>公开网页</th>
-              <th>公开接口</th>
+              <th>网页访问</th>
+              <th>接口访问</th>
               <th>根域接收</th>
               <th>子域接收</th>
-              <th>更新时间</th>
+              <th>最近更新</th>
             </tr>
           </thead>
           <tbody>
             {% for domain in domains %}
               <tr>
                 <td>
-                  <a href="/admin/domains/{{ domain.id }}">{{ domain.root_domain_ascii }}</a>
+                  <a href="/admin/domains/{{ domain.id }}" style="font-weight: 600; color: var(--text); text-decoration: none;">
+                    {{ domain.root_domain_ascii }}
+                  </a>
                 </td>
                 <td>
                   <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}">
                     {{ "已启用" if domain.is_active else "未启用" }}
                   </span>
                 </td>
-                <td>{{ cn_bool(domain.public_web_enabled, yes="已开启", no="已关闭") }}</td>
-                <td>{{ cn_bool(domain.public_api_enabled, yes="已开启", no="已关闭") }}</td>
-                <td>{{ cn_bool(domain.accept_exact) }}</td>
-                <td>{{ cn_bool(domain.accept_subdomains) }}</td>
-                <td>{{ domain.updated_at }}</td>
+                <td>
+                  <span class="pill {% if domain.public_web_enabled %}pill--success{% else %}pill--neutral{% endif %}">
+                    {{ cn_bool(domain.public_web_enabled, yes="开启", no="关闭") }}
+                  </span>
+                </td>
+                <td>
+                  <span class="pill {% if domain.public_api_enabled %}pill--success{% else %}pill--neutral{% endif %}">
+                    {{ cn_bool(domain.public_api_enabled, yes="开启", no="关闭") }}
+                  </span>
+                </td>
+                <td><span style="color: {% if domain.accept_exact %}var(--text){% else %}var(--muted){% endif %}">{{ cn_bool(domain.accept_exact) }}</span></td>
+                <td><span style="color: {% if domain.accept_subdomains %}var(--text){% else %}var(--muted){% endif %}">{{ cn_bool(domain.accept_subdomains) }}</span></td>
+                <td class="muted">{{ domain.updated_at }}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     {% else %}
-      <div class="empty-state">还没有域名被接入系统。</div>
+      <div class="empty-state">
+        <p>还没有任何域名被接入系统</p>
+      </div>
     {% endif %}
   </section>
 {% endblock %}

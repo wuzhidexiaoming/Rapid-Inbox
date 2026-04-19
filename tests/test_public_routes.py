@@ -41,8 +41,8 @@ async def test_public_home_page_exposes_mailbox_entry_point(app_client) -> None:
     response = await app_client.get("/")
 
     assert response.status_code == 200
-    assert "把公开邮箱变成一条很快、很直接的访问路径。" in response.text
-    assert "打开邮箱" in response.text
+    assert "重新定义公开邮箱" in response.text
+    assert "立即开启" in response.text
 
 
 @pytest.mark.asyncio
@@ -110,6 +110,27 @@ async def test_public_mailbox_page_exposes_pagination_links(app_client, runtime,
     assert second_page.status_code == 200
     assert "Middle" in second_page.text
     assert "?limit=1&offset=0" in second_page.text
+
+
+@pytest.mark.asyncio
+async def test_public_mailbox_page_defaults_to_twenty_results(app_client, runtime, monkeypatch) -> None:
+    _patch_sequenced_utc_now(monkeypatch)
+
+    await runtime.create_domain("adb.com")
+    for index in range(21):
+        await runtime.accept_message(
+            rcpt_tos=["foo@adb.com"],
+            envelope_from="sender@example.com",
+            content=_mail_bytes(f"Subject {index:02d}", f"default-{index:02d}@example.com", f"body-{index:02d}"),
+        )
+    await runtime.drain_parser_queue()
+
+    response = await app_client.get("/mail/foo@adb.com")
+
+    assert response.status_code == 200
+    assert "?limit=20&offset=20" in response.text
+    assert "Subject 20" in response.text
+    assert "Subject 00" not in response.text
 
 
 @pytest.mark.asyncio

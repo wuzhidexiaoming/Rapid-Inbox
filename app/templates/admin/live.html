@@ -1,57 +1,329 @@
 {% extends "admin/base.html" %}
 
+{% block head %}
+<style>
+  .live-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .status-left {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .status-pulse {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .pulse-core {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--success);
+    position: relative;
+    z-index: 2;
+  }
+
+  .pulse-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid var(--success);
+    animation: radarPulse 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+    opacity: 0;
+  }
+
+  @keyframes radarPulse {
+    0% { transform: scale(0.5); opacity: 0.8; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+
+  .status-disconnected .pulse-core { background: var(--danger); }
+  .status-disconnected .pulse-ring { border-color: var(--danger); animation: none; opacity: 0.2; }
+
+  .terminal-window {
+    background: #020617;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    height: 600px;
+  }
+
+  .terminal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 1.5rem;
+    background: rgba(30, 41, 59, 0.8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .window-controls {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .window-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .dot-red { background: #ef4444; }
+  .dot-yellow { background: #f59e0b; }
+  .dot-green { background: #10b981; }
+
+  .terminal-title {
+    color: var(--muted);
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+  }
+
+  .terminal-feed {
+    padding: 0; /* Reset padding for full-width rows */
+    overflow-y: auto;
+    flex: 1;
+    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+    font-size: 0.85rem;
+    scroll-behavior: smooth;
+  }
+
+  .terminal-feed::-webkit-scrollbar { width: 8px; }
+  .terminal-feed::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+  .terminal-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+  /* Vercel/Linear Style Compact Deployment Logs */
+  .log-entry {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-entry:last-child {
+    border-bottom: none;
+  }
+
+  .log-summary {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 1.5rem;
+    cursor: pointer;
+    list-style: none; /* Hide default triangle */
+    transition: background 0.2s;
+    user-select: none;
+  }
+
+  .log-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .log-summary:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .log-time {
+    color: #64748b; /* Slate 500 */
+    flex-shrink: 0;
+    min-width: 90px; /* Fixed width to align logs */
+  }
+
+  .log-badge {
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+    min-width: 110px;
+    text-align: center;
+  }
+
+  .badge-rcpt_accepted { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+  .badge-rcpt_rejected { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+  .badge-queued { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+  .badge-default { background: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+
+  .log-message {
+    color: #e2e8f0;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .log-meta-id {
+    color: #94a3b8;
+  }
+  
+  .log-target {
+    color: var(--primary);
+  }
+
+  .log-chevron {
+    color: #64748b;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  .log-entry[open] .log-chevron {
+    transform: rotate(90deg);
+  }
+
+  .log-entry[open] .log-summary {
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  }
+
+  .log-details {
+    background: rgba(0, 0, 0, 0.2);
+    border-left: 2px solid var(--primary);
+    padding: 1rem 1.5rem 1rem 2.5rem; /* Indented to show hierarchy */
+  }
+
+  .log-json {
+    margin: 0;
+    color: #a78bfa; /* subtle violet for json */
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 0.8rem;
+  }
+
+  .sessions-card {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 1rem;
+    border: 1px solid var(--border);
+    padding: 2rem;
+  }
+
+  .table td, .table th {
+    white-space: nowrap;
+  }
+
+  .copy-btn-icon {
+    cursor: pointer;
+    color: var(--muted);
+    transition: color 0.2s;
+  }
+  
+  .copy-btn-icon:hover {
+    color: var(--text);
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-  <section class="card">
-    <div class="section-title">
-      <div>
-        <p class="eyebrow">SMTP</p>
-        <h2>实时收件活动</h2>
-        <p class="section-copy">页面会通过 SSE 自动推送最新的收件人与入队事件，适合排查当前 SMTP 流量。</p>
+<div class="live-dashboard">
+
+  <!-- Status Bar -->
+  <div class="status-bar" data-aos="fade-down">
+    <div class="status-left">
+      <div class="status-pulse" id="stream-status-wrapper">
+        <div class="pulse-ring"></div>
+        <div class="pulse-core"></div>
       </div>
-      <div class="button-row">
-        <span class="badge" id="stream-status">连接中</span>
-        <a class="button button--ghost" href="/admin/messages">查看邮件</a>
+      <div>
+        <h2 style="margin: 0; font-size: 1.25rem;">实时监控中枢 (Live Command Center)</h2>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+          <span id="stream-status" style="color: var(--success); font-weight: 600; font-size: 0.9rem;">已连接</span>
+          <span class="muted" style="font-size: 0.85rem;">| 推送接口 (SSE Endpoint):</span>
+          <code style="font-size: 0.8rem; background: rgba(255,255,255,0.05); padding: 0.1rem 0.4rem; border-radius: 4px;" id="endpoint-url">{{ stream_url }}</code>
+          <svg class="copy-btn-icon" onclick="navigator.clipboard.writeText(document.getElementById('endpoint-url').textContent)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </div>
       </div>
     </div>
-    <p class="muted">当前推送地址：<code>{{ stream_url }}</code></p>
-    <ul class="stack" id="live-feed">
+    <div>
+      <button id="clear-logs" class="button button--ghost" style="font-size: 0.85rem; padding: 0.4rem 1rem;">清空控制台</button>
+    </div>
+  </div>
+
+  <!-- Terminal Window -->
+  <div class="terminal-window" data-aos="fade-up" data-aos-delay="100">
+    <div class="terminal-header">
+      <div class="window-controls">
+        <div class="window-dot dot-red"></div>
+        <div class="window-dot dot-yellow"></div>
+        <div class="window-dot dot-green"></div>
+      </div>
+      <div class="terminal-title">~/极速收件箱/实时监控流</div>
+      <div style="width: 52px;"></div> <!-- Spacer for centering -->
+    </div>
+    
+    <div class="terminal-feed" id="live-feed">
       {% if events %}
         {% for event in events %}
-          <li class="stack-row" data-event-type="{{ event.type }}">
-            <div class="stack-meta">
-              <strong>{{ cn_event_type(event.type) }}</strong>
-              <span class="muted">{{ event.ts }}</span>
-              {% if event.session_id is defined and event.session_id %}
-                <span class="muted">会话 {{ event.session_id }}</span>
-              {% endif %}
-              {% if event.rcpt_to is defined and event.rcpt_to %}
-                <span class="muted">{{ event.rcpt_to }}</span>
-              {% endif %}
-              {% if event.message_id is defined and event.message_id %}
-                <span class="muted">邮件 {{ event.message_id }}</span>
-              {% endif %}
+          <details class="log-entry" data-event-type="{{ event.type }}">
+            <summary class="log-summary">
+              <span class="log-time">{{ event.ts | default("00:00:00") }}</span>
+              <span class="log-badge badge-{{ event.type }}">{{ event.type | upper }}</span>
+              <span class="log-message">
+                {% if event.rcpt_to %}
+                  → <span class="log-target">{{ event.rcpt_to }}</span>
+                {% endif %}
+                {% if event.session_id %}
+                  <span class="log-meta-id">[会话: {{ event.session_id }}]</span>
+                {% endif %}
+                {% if event.message_id %}
+                  <span class="log-meta-id">[邮件ID: {{ event.message_id }}]</span>
+                {% endif %}
+                {% if not event.rcpt_to and not event.session_id and not event.message_id %}
+                  <span class="log-meta-id">系统事件已触发</span>
+                {% endif %}
+              </span>
+              <svg class="log-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </summary>
+            <div class="log-details">
+              <pre class="log-json">{{ event | tojson(indent=2) }}</pre>
             </div>
-            <code>{{ event | tojson }}</code>
-          </li>
+          </details>
         {% endfor %}
       {% else %}
-        <li class="stack-row empty-state" data-empty-state="live">
-          <div class="stack-meta">
-            <strong>暂无实时 SMTP 事件</strong>
-            <span class="muted">新的收件活动出现后，会自动显示在这里。</span>
-          </div>
-        </li>
+        <div class="empty-state" data-empty-state="live" style="border: none; padding: 4rem 1rem; background: transparent;">
+          <p style="color: var(--muted); font-family: monospace;">$ 正在等待 SMTP 事件传入...</p>
+        </div>
       {% endif %}
-    </ul>
-  </section>
-
-  <section class="card">
-    <div class="section-title">
-      <div>
-        <p class="eyebrow">会话</p>
-        <h2>最近的 SMTP 会话</h2>
-      </div>
     </div>
+  </div>
+  <div class="pagination-summary" style="margin-top: -0.75rem;">
+    终端窗口默认只展示最近 {{ stream_item_limit }} 条流事件，新的事件会自动顶到最前面。
+  </div>
+
+  <!-- Sessions Table -->
+  <div class="sessions-card" data-aos="fade-up" data-aos-delay="200">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+      <h3 style="margin: 0; font-size: 1.15rem;">近期网络会话</h3>
+      <span class="pill pill--neutral">默认每页 {{ sessions_pagination.limit }} 条</span>
+    </div>
+    
     {% if sessions %}
       <div class="table-wrap">
         <table class="table">
@@ -59,126 +331,180 @@
             <tr>
               <th>会话 ID</th>
               <th>状态</th>
-              <th>远端地址</th>
-              <th>HELO</th>
-              <th>TLS</th>
-              <th>最近 RCPT</th>
+              <th>远端 IP</th>
+              <th>HELO 标识</th>
+              <th>TLS 加密</th>
+              <th>最近收件人</th>
               <th>连接时间</th>
-              <th>最近命令</th>
             </tr>
           </thead>
           <tbody>
             {% for session in sessions %}
               <tr>
-                <td><code>{{ session.id }}</code></td>
-                <td>{{ cn_session_status(session.status) }}</td>
+                <td><code style="color: var(--secondary); background: transparent; padding: 0;">{{ session.id }}</code></td>
                 <td>
-                  {{ session.remote_ip }}
-                  {% if session.remote_port is not none %}:{{ session.remote_port }}{% endif %}
+                  <span class="pill {% if session.status == 'open' %}pill--success{% elif session.status == 'error' %}pill--danger{% else %}pill--neutral{% endif %}" style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
+                    {{ cn_session_status(session.status) }}
+                  </span>
                 </td>
-                <td>{{ session.helo_name or "无" }}</td>
-                <td>{{ cn_bool(session.tls_used) }}</td>
-                <td>{{ session.last_rcpt_to_sample or "无" }}</td>
-                <td>{{ session.connect_at }}</td>
-                <td>{{ session.last_command_at or "无" }}</td>
+                <td style="font-family: monospace;">
+                  {{ session.remote_ip }}<span class="muted">{% if session.remote_port is not none %}:{{ session.remote_port }}{% endif %}</span>
+                </td>
+                <td class="muted">{{ session.helo_name or "N/A" }}</td>
+                <td>
+                  {% if session.tls_used %}
+                    <span style="color: var(--success);">是</span>
+                  {% else %}
+                    <span class="muted">否</span>
+                  {% endif %}
+                </td>
+                <td class="muted">{{ session.last_rcpt_to_sample or "N/A" }}</td>
+                <td class="muted" style="font-size: 0.85rem;">{{ session.connect_at }}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      <div class="pagination-panel">
+        <div class="pagination-summary">
+          当前第 {{ sessions_pagination.current_page }} / {{ sessions_pagination.total_pages }} 页，显示 {{ sessions_pagination.start_index }} - {{ sessions_pagination.end_index }}，共 {{ sessions_pagination.total_count }} 个会话
+        </div>
+        <div class="pagination-nav">
+          {% if sessions_pagination.has_previous %}
+            <a class="button button--ghost" href="{{ sessions_pagination.previous_page_url | safe }}">上一页</a>
+          {% endif %}
+          {% if sessions_pagination.has_next %}
+            <a class="button button--ghost" href="{{ sessions_pagination.next_page_url | safe }}">下一页</a>
+          {% endif %}
+        </div>
+      </div>
     {% else %}
-      <div class="empty-state">还没有 SMTP 会话历史。</div>
+      <div class="empty-state" style="border: 1px dashed var(--border);">
+        <p>暂无近期 SMTP 会话。</p>
+      </div>
     {% endif %}
-  </section>
+  </div>
 
-  <script>
-    (() => {
-      const eventTypeLabels = {
-        rcpt_accepted: "收件人已接受",
-        rcpt_rejected: "收件人被拒绝",
-        queued: "邮件已入队",
-      };
-      const feed = document.getElementById("live-feed");
-      const status = document.getElementById("stream-status");
-      if (!feed || !window.EventSource) {
-        if (status) {
-          status.textContent = "当前浏览器不支持 SSE";
-        }
-        return;
-      }
+</div>
 
-      const appendEvent = (payload) => {
-        const emptyState = feed.querySelector("[data-empty-state='live']");
-        if (emptyState) {
-          feed.innerHTML = "";
-        }
-
-        const item = document.createElement("li");
-        item.className = "stack-row";
-        item.dataset.eventType = payload.type || "event";
-
-        const meta = document.createElement("div");
-        meta.className = "stack-meta";
-
-        const title = document.createElement("strong");
-        title.textContent = eventTypeLabels[payload.type] || payload.type || "事件";
-        meta.appendChild(title);
-
-        const ts = document.createElement("span");
-        ts.className = "muted";
-        ts.textContent = payload.ts || "";
-        meta.appendChild(ts);
-
-        if (payload.session_id) {
-          const session = document.createElement("span");
-          session.className = "muted";
-          session.textContent = `会话 ${payload.session_id}`;
-          meta.appendChild(session);
-        }
-
-        if (payload.rcpt_to) {
-          const rcpt = document.createElement("span");
-          rcpt.className = "muted";
-          rcpt.textContent = payload.rcpt_to;
-          meta.appendChild(rcpt);
-        }
-
-        if (payload.message_id) {
-          const message = document.createElement("span");
-          message.className = "muted";
-          message.textContent = `邮件 ${payload.message_id}`;
-          meta.appendChild(message);
-        }
-
-        const code = document.createElement("code");
-        code.textContent = JSON.stringify(payload);
-
-        item.appendChild(meta);
-        item.appendChild(code);
-        feed.prepend(item);
-      };
-
-      const source = new EventSource({{ stream_url | tojson }});
-      if (status) {
-        status.textContent = "已连接";
-      }
-
-      const eventTypes = {{ live_event_types | tojson }};
-      eventTypes.forEach((type) => {
-        source.addEventListener(type, (event) => {
-          try {
-            appendEvent(JSON.parse(event.data));
-          } catch (error) {
-            appendEvent({type, raw: event.data});
-          }
-        });
+<script>
+  (() => {
+    const feed = document.getElementById("live-feed");
+    const statusWrapper = document.getElementById("stream-status-wrapper");
+    const statusText = document.getElementById("stream-status");
+    const clearBtn = document.getElementById("clear-logs");
+    
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        if (feed) feed.innerHTML = '<div class="empty-state" data-empty-state="live" style="border: none; padding: 4rem 1rem; background: transparent;"><p style="color: var(--muted); font-family: monospace;">$ 控制台已清空。正在等待新事件...</p></div>';
       });
+    }
+    
+    if (!feed || !window.EventSource) {
+      if (statusText) statusText.textContent = "不支持 SSE";
+      if (statusWrapper) statusWrapper.classList.add("status-disconnected");
+      return;
+    }
 
-      source.onerror = () => {
-        if (status) {
-          status.textContent = "连接断开";
+    const getBadgeClass = (type) => {
+      if (type === 'rcpt_accepted') return 'badge-rcpt_accepted';
+      if (type === 'rcpt_rejected') return 'badge-rcpt_rejected';
+      if (type === 'queued') return 'badge-queued';
+      return 'badge-default';
+    };
+
+    const appendEvent = (payload) => {
+      const emptyState = feed.querySelector("[data-empty-state='live']");
+      if (emptyState) {
+        feed.innerHTML = "";
+      }
+
+      // Use <details> for the expandable accordion effect
+      const item = document.createElement("details");
+      item.className = "log-entry";
+
+      // Summary holds the single-line log
+      const summary = document.createElement("summary");
+      summary.className = "log-summary";
+
+      const ts = document.createElement("span");
+      ts.className = "log-time";
+      // Extract time portion if it's an ISO string, otherwise fallback to standard payload.ts
+      let timeStr = payload.ts || new Date().toISOString();
+      if (timeStr.includes("T")) timeStr = timeStr.split("T")[1].substring(0, 12);
+      ts.textContent = timeStr;
+      summary.appendChild(ts);
+
+      const badge = document.createElement("span");
+      badge.className = `log-badge ${getBadgeClass(payload.type)}`;
+      badge.textContent = (payload.type || "未知").toUpperCase();
+      summary.appendChild(badge);
+
+      const msg = document.createElement("span");
+      msg.className = "log-message";
+      let msgHtml = "";
+      if (payload.rcpt_to) msgHtml += `→ <span class="log-target">${payload.rcpt_to}</span> `;
+      if (payload.session_id) msgHtml += `<span class="log-meta-id">[会话: ${payload.session_id}]</span> `;
+      if (payload.message_id) msgHtml += `<span class="log-meta-id">[邮件ID: ${payload.message_id}]</span> `;
+      if (!payload.rcpt_to && !payload.session_id && !payload.message_id) msgHtml += `<span class="log-meta-id">系统事件已触发</span>`;
+      
+      msg.innerHTML = msgHtml;
+      summary.appendChild(msg);
+
+      // Chevron icon
+      const chevronWrapper = document.createElement("div");
+      chevronWrapper.innerHTML = `<svg class="log-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+      summary.appendChild(chevronWrapper.firstChild);
+
+      // Details holds the raw JSON
+      const details = document.createElement("div");
+      details.className = "log-details";
+      
+      const code = document.createElement("pre");
+      code.className = "log-json";
+      code.textContent = JSON.stringify(payload, null, 2);
+      details.appendChild(code);
+
+      item.appendChild(summary);
+      item.appendChild(details);
+      
+      // Auto-open the very first event if feed is currently empty
+      if (feed.children.length === 0) item.open = true;
+
+      feed.prepend(item);
+      while (feed.children.length > {{ stream_item_limit }}) {
+        feed.removeChild(feed.lastElementChild);
+      }
+    };
+
+    const source = new EventSource({{ stream_url | tojson }});
+    
+    source.onopen = () => {
+      if (statusText) {
+        statusText.textContent = "已连接";
+        statusText.style.color = "var(--success)";
+      }
+      if (statusWrapper) statusWrapper.classList.remove("status-disconnected");
+    };
+
+    const eventTypes = {{ live_event_types | tojson }};
+    eventTypes.forEach((type) => {
+      source.addEventListener(type, (event) => {
+        try {
+          appendEvent(JSON.parse(event.data));
+        } catch (error) {
+          appendEvent({type, raw: event.data});
         }
-      };
-    })();
-  </script>
+      });
+    });
+
+    source.onerror = () => {
+      if (statusText) {
+        statusText.textContent = "连接已断开";
+        statusText.style.color = "var(--danger)";
+      }
+      if (statusWrapper) statusWrapper.classList.add("status-disconnected");
+    };
+  })();
+</script>
 {% endblock %}

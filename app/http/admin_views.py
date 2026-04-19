@@ -4,11 +4,12 @@ import sqlite3
 from typing import Any
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.auth.sessions import SESSION_DURATION_DAYS
 from app.db.connection import connect_database
+from app.http.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, build_pagination_context
 
 
 router = APIRouter()
@@ -63,6 +64,18 @@ def _parse_positive_int(value: str | None, *, default: int, field_name: str) -> 
     except ValueError as exc:
         raise ValueError(f"invalid {field_name}") from exc
     if normalized < 1:
+        raise ValueError(f"invalid {field_name}")
+    return normalized
+
+
+def _parse_non_negative_int(value: str | None, *, default: int, field_name: str) -> int:
+    if value is None or not value.strip():
+        return default
+    try:
+        normalized = int(value)
+    except ValueError as exc:
+        raise ValueError(f"invalid {field_name}") from exc
+    if normalized < 0:
         raise ValueError(f"invalid {field_name}")
     return normalized
 
@@ -212,7 +225,32 @@ def _list_recent_messages(request: Request, *, limit: int = 100) -> list[dict[st
     return [dict(row) for row in rows]
 
 
-def _list_api_keys(request: Request, *, limit: int = 100) -> list[dict[str, Any]]:
+def _list_messages_page(request: Request, *, limit: int, offset: int) -> list[dict[str, Any]]:
+    with connect_database(request.app.state.runtime.settings.database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                m.id,
+                m.subject,
+                m.from_addr,
+                m.received_at,
+                m.parse_status,
+                m.parse_error,
+                m.has_attachments,
+                m.attachment_count,
+                COUNT(d.id) AS delivery_count
+            FROM messages AS m
+            LEFT JOIN message_deliveries AS d ON d.message_id = m.id
+            GROUP BY m.id
+            ORDER BY m.received_at DESC, m.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _list_api_keys(request: Request, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
     with connect_database(request.app.state.runtime.settings.database_path) as connection:
         rows = connection.execute(
             """
@@ -250,11 +288,43 @@ def _list_api_keys(request: Request, *, limit: int = 100) -> list[dict[str, Any]
                 ) AS mailbox_count
             FROM api_keys AS k
             ORDER BY k.created_at DESC, k.id DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (limit,),
+            (limit, offset),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def _count_table_rows(request: Request, table_name: str) -> int:
+    with connect_database(request.app.state.runtime.settings.database_path) as connection:
+        return _count(connection, f"SELECT COUNT(*) AS count FROM {table_name}")
+
+
+def _api_keys_page_context(
+    request: Request,
+    admin: dict[str, Any],
+    *,
+    limit: int = DEFAULT_PAGE_SIZE,
+    offset: int = 0,
+    created_api_key: dict[str, Any] | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    api_keys = _list_api_keys(request, limit=limit, offset=offset)
+    total_count = _count_table_rows(request, "api_keys")
+    return {
+        "page_title": "API 密钥",
+        "admin": admin,
+        "api_keys": api_keys,
+        "created_api_key": created_api_key,
+        "error": error,
+        "pagination": build_pagination_context(
+            path="/admin/api-keys",
+            limit=limit,
+            offset=offset,
+            total_count=total_count,
+            item_count=len(api_keys),
+        ),
+    }
 
 
 def _domain_form_values(request: Request, form: dict[str, str] | None = None) -> dict[str, Any]:
@@ -508,18 +578,34 @@ async def domain_detail_page(domain_id: int, request: Request) -> Response:
 
 
 @router.get("/admin/mailboxes", response_class=HTMLResponse)
-async def mailboxes_page(request: Request) -> Response:
+async def mailboxes_page(
+    request: Request,
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> Response:
     admin_or_response = await _require_admin(request)
     if isinstance(admin_or_response, Response):
         return admin_or_response
 
+    mailboxes = request.app.state.runtime.mailboxes.list_mailboxes(
+        limit=limit,
+        offset=offset,
+    )["items"]
+    total_count = _count_table_rows(request, "mailboxes")
     return _render(
         request,
         "admin/mailboxes.html",
         {
             "page_title": "邮箱",
             "admin": admin_or_response,
-            "mailboxes": request.app.state.runtime.mailboxes.list_mailboxes()["items"],
+            "mailboxes": mailboxes,
+            "pagination": build_pagination_context(
+                path="/admin/mailboxes",
+                limit=limit,
+                offset=offset,
+                total_count=total_count,
+                item_count=len(mailboxes),
+            ),
         },
     )
 
@@ -536,6 +622,8 @@ async def update_mailbox_visibility(mailbox_id: int, request: Request) -> Respon
         updates["public_enabled"] = _form_bool(form.get("public_enabled"))
     if "is_hidden" in form:
         updates["is_hidden"] = _form_bool(form.get("is_hidden"))
+    limit = _parse_positive_int(form.get("limit"), default=DEFAULT_PAGE_SIZE, field_name="limit")
+    offset = _parse_non_negative_int(form.get("offset"), default=0, field_name="offset")
 
     try:
         await request.app.state.runtime.mailboxes.update_mailbox(mailbox_id, updates)
@@ -544,28 +632,49 @@ async def update_mailbox_visibility(mailbox_id: int, request: Request) -> Respon
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
-    return RedirectResponse("/admin/mailboxes", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(
+        f"/admin/mailboxes?limit={limit}&offset={offset}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
 
 
 @router.get("/admin/messages", response_class=HTMLResponse)
-async def messages_page(request: Request) -> Response:
+async def messages_page(
+    request: Request,
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> Response:
     admin_or_response = await _require_admin(request)
     if isinstance(admin_or_response, Response):
         return admin_or_response
 
+    messages = _list_messages_page(request, limit=limit, offset=offset)
+    with connect_database(request.app.state.runtime.settings.database_path) as connection:
+        total_count = _count(connection, "SELECT COUNT(*) AS count FROM messages")
     return _render(
         request,
         "admin/messages.html",
         {
             "page_title": "邮件",
             "admin": admin_or_response,
-            "messages": _list_recent_messages(request),
+            "messages": messages,
+            "pagination": build_pagination_context(
+                path="/admin/messages",
+                limit=limit,
+                offset=offset,
+                total_count=total_count,
+                item_count=len(messages),
+            ),
         },
     )
 
 
 @router.get("/admin/api-keys", response_class=HTMLResponse)
-async def api_keys_page(request: Request) -> Response:
+async def api_keys_page(
+    request: Request,
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> Response:
     admin_or_response = await _require_admin(request)
     if isinstance(admin_or_response, Response):
         return admin_or_response
@@ -573,13 +682,7 @@ async def api_keys_page(request: Request) -> Response:
     return _render(
         request,
         "admin/api_keys.html",
-        {
-            "page_title": "API 密钥",
-            "admin": admin_or_response,
-            "api_keys": _list_api_keys(request),
-            "created_api_key": None,
-            "error": None,
-        },
+        _api_keys_page_context(request, admin_or_response, limit=limit, offset=offset),
     )
 
 
@@ -600,13 +703,7 @@ async def create_api_key(request: Request) -> Response:
         return _render(
             request,
             "admin/api_keys.html",
-            {
-                "page_title": "API 密钥",
-                "admin": admin_or_response,
-                "api_keys": _list_api_keys(request),
-                "created_api_key": None,
-                "error": "名称不能为空。",
-            },
+            _api_keys_page_context(request, admin_or_response, error="名称不能为空。"),
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
@@ -622,26 +719,14 @@ async def create_api_key(request: Request) -> Response:
         return _render(
             request,
             "admin/api_keys.html",
-            {
-                "page_title": "API 密钥",
-                "admin": admin_or_response,
-                "api_keys": _list_api_keys(request),
-                "created_api_key": None,
-                "error": str(exc),
-            },
+            _api_keys_page_context(request, admin_or_response, error=str(exc)),
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
     return _render(
         request,
         "admin/api_keys.html",
-        {
-            "page_title": "API 密钥",
-            "admin": admin_or_response,
-            "api_keys": _list_api_keys(request),
-            "created_api_key": created,
-            "error": None,
-        },
+        _api_keys_page_context(request, admin_or_response, created_api_key=created),
         status_code=status.HTTP_200_OK,
     )
 
@@ -657,22 +742,42 @@ async def revoke_api_key(api_key_id: int, request: Request) -> Response:
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    return RedirectResponse("/admin/api-keys", status_code=status.HTTP_303_SEE_OTHER)
+    form = _parse_form_body(await request.body())
+    limit = _parse_positive_int(form.get("limit"), default=DEFAULT_PAGE_SIZE, field_name="limit")
+    offset = _parse_non_negative_int(form.get("offset"), default=0, field_name="offset")
+    return RedirectResponse(
+        f"/admin/api-keys?limit={limit}&offset={offset}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
 
 
 @router.get("/admin/audit", response_class=HTMLResponse)
-async def audit_page(request: Request) -> Response:
+async def audit_page(
+    request: Request,
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> Response:
     admin_or_response = await _require_admin(request)
     if isinstance(admin_or_response, Response):
         return admin_or_response
 
+    with connect_database(request.app.state.runtime.settings.database_path) as connection:
+        total_count = _count(connection, "SELECT COUNT(*) AS count FROM audit_logs")
+    logs = request.app.state.runtime.audit.list_logs(limit=limit, offset=offset)["items"]
     return _render(
         request,
         "admin/audit.html",
         {
             "page_title": "审计日志",
             "admin": admin_or_response,
-            "logs": request.app.state.runtime.audit.list_logs(limit=100)["items"],
+            "logs": logs,
+            "pagination": build_pagination_context(
+                path="/admin/audit",
+                limit=limit,
+                offset=offset,
+                total_count=total_count,
+                item_count=len(logs),
+            ),
         },
     )
 

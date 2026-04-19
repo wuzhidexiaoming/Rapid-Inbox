@@ -1,82 +1,177 @@
 {% extends "admin/base.html" %}
 
+{% block head %}
+<style>
+  .welcome-banner {
+    background: linear-gradient(to right, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 1rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+  }
+  
+  .welcome-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    color: var(--text);
+  }
+
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+  
+  .metric-card {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric-card::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    bottom: -20px;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  
+  .metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .metric-icon {
+    color: var(--muted);
+  }
+  
+  .metric-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: 0.5rem 0;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  
+  .dashboard-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 2rem;
+  }
+
+  .list-item-hover {
+    transition: background 0.2s, padding-left 0.2s;
+  }
+  
+  .list-item-hover:hover {
+    background: rgba(255, 255, 255, 0.03);
+    padding-left: 1.25rem;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-  <section class="card card--accent">
-    <div class="section-title">
-      <div>
-        <p class="eyebrow">总览</p>
-        <h2>今天的系统状态一目了然</h2>
-        <p class="section-copy">你当前以 {{ admin.display_name or admin.username }} 身份登录，可以从这里快速切到域名、邮件和实时活动页。</p>
+
+<div class="welcome-banner" data-aos="fade-down">
+  <div>
+    <h2 class="welcome-title">欢迎回来, {{ admin.display_name or admin.username }}</h2>
+    <p class="muted" style="margin: 0;">系统的实时状态和近期活动已为您准备就绪。</p>
+  </div>
+  <div class="button-row">
+    <a href="/admin/domains" class="button button--primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.2rem;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+      新建域名
+    </a>
+  </div>
+</div>
+
+<div class="metric-grid">
+  {% for item in stats %}
+    <div class="card metric-card" data-aos="fade-up" data-aos-delay="{{ loop.index0 * 100 }}">
+      <div class="metric-header">
+        <span class="eyebrow" style="margin: 0; color: var(--muted);">{{ item.label }}</span>
+        <svg class="metric-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
       </div>
-      <div class="button-row">
-        <a class="button" href="/admin/domains">管理域名</a>
-        <a class="button button--ghost" href="/admin/messages">查看邮件</a>
-      </div>
+      <div class="metric-value">{{ item.value }}</div>
+      <p class="muted" style="margin: 0; font-size: 0.85rem; color: var(--primary);">{{ item.hint }}</p>
     </div>
-  </section>
+  {% endfor %}
+</div>
 
-  <section class="grid stats">
-    {% for item in stats %}
-      <article class="card">
-        <p class="eyebrow">{{ item.label }}</p>
-        <p class="metric-value">{{ item.value }}</p>
-        <p class="metric-hint">{{ item.hint }}</p>
-      </article>
-    {% endfor %}
-  </section>
-
-  <section class="grid two-up">
-    <article class="card">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">域名</p>
-          <h2>最近接入的域名</h2>
-        </div>
+<div class="dashboard-columns">
+  <div class="card" data-aos="fade-up" data-aos-delay="200" style="padding: 1.5rem 0;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 1.5rem;">
+      <h3 style="margin: 0; font-size: 1.1rem;">近期接入域名</h3>
+      <a href="/admin/domains" class="button button--ghost" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">查看全部</a>
+    </div>
+    
+    {% if recent_domains %}
+      <ul class="stack" style="gap: 0;">
+        {% for domain in recent_domains %}
+          <li class="stack-row list-item-hover" style="border: none; border-radius: 0; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem;">
+            <div class="stack-meta">
+              <a href="/admin/domains/{{ domain.id }}" style="font-size: 1rem; font-weight: 600;">{{ domain.root_domain_ascii }}</a>
+              <span class="muted" style="font-size: 0.8rem;">{{ domain.created_at }}</span>
+            </div>
+            <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+              {{ "已启用" if domain.is_active else "未启用" }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state" style="margin: 0 1.5rem; border: 1px dashed var(--border);">
+        <p>暂无域名数据</p>
       </div>
-      {% if recent_domains %}
-        <ul class="stack">
-          {% for domain in recent_domains %}
-            <li class="stack-row">
-              <div class="stack-meta">
-                <a href="/admin/domains/{{ domain.id }}">{{ domain.root_domain_ascii }}</a>
-                <span class="muted">{{ domain.created_at }}</span>
-              </div>
-              <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}">
-                {{ "已启用" if domain.is_active else "未启用" }}
-              </span>
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="empty-state">还没有接入任何域名。</div>
-      {% endif %}
-    </article>
+    {% endif %}
+  </div>
 
-    <article class="card">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">邮件</p>
-          <h2>最新接收的邮件</h2>
-        </div>
+  <div class="card" data-aos="fade-up" data-aos-delay="300" style="padding: 1.5rem 0;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 1.5rem;">
+      <h3 style="margin: 0; font-size: 1.1rem;">最新接收邮件</h3>
+      <a href="/admin/messages" class="button button--ghost" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">查看全部</a>
+    </div>
+
+    {% if recent_messages %}
+      <ul class="stack" style="gap: 0;">
+        {% for message in recent_messages %}
+          <li class="stack-row list-item-hover" style="border: none; border-radius: 0; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem;">
+            <div class="stack-meta" style="max-width: 65%;">
+              <strong style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-size: 0.95rem;">
+                {{ message.subject or "（无主题）" }}
+              </strong>
+              <span class="muted" style="font-size: 0.8rem;">发件人: {{ message.from_addr or "未知" }}</span>
+            </div>
+            <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+              {{ cn_parse_status(message.parse_status) }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state" style="margin: 0 1.5rem; border: 1px dashed var(--border);">
+        <p>暂无邮件数据</p>
       </div>
-      {% if recent_messages %}
-        <ul class="stack">
-          {% for message in recent_messages %}
-            <li class="stack-row">
-              <div class="stack-meta">
-                <strong>{{ message.subject or "（无主题）" }}</strong>
-                <span class="muted">{{ message.from_addr or "未知发件人" }}</span>
-                <span class="muted">{{ message.received_at }}</span>
-              </div>
-              <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}">
-                {{ cn_parse_status(message.parse_status) }}
-              </span>
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="empty-state">系统还没有收到邮件。</div>
-      {% endif %}
-    </article>
-  </section>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

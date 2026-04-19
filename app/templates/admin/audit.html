@@ -40,6 +40,19 @@
           </tbody>
         </table>
       </div>
+      <div class="pagination-panel">
+        <div class="pagination-summary">
+          当前第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页，显示 {{ pagination.start_index }} - {{ pagination.end_index }}，共 {{ pagination.total_count }} 条审计记录
+        </div>
+        <div class="pagination-nav">
+          {% if pagination.has_previous %}
+            <a class="button button--ghost" href="{{ pagination.previous_page_url | safe }}">上一页</a>
+          {% endif %}
+          {% if pagination.has_next %}
+            <a class="button button--ghost" href="{{ pagination.next_page_url | safe }}">下一页</a>
+          {% endif %}
+        </div>
+      </div>
     {% else %}
       <div class="empty-state">还没有审计记录。</div>
     {% endif %}

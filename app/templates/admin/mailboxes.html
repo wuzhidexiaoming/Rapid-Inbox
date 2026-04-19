@@ -1,59 +1,137 @@
 {% extends "admin/base.html" %}
 
+{% block head %}
+<style>
+  .mailbox-row {
+    transition: background 0.2s;
+  }
+  
+  .mailbox-row:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .inline-settings-form {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
+  }
+
+  .custom-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--muted);
+    transition: color 0.2s;
+  }
+  
+  .custom-checkbox-label:hover {
+    color: var(--text);
+  }
+
+  .custom-checkbox-label input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--primary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-  <section class="card">
-    <div class="section-title">
-      <div>
-        <p class="eyebrow">邮箱</p>
-        <h2>邮箱清单</h2>
-        <p class="section-copy">可以在这里调整邮箱是否公开访问，或将邮箱隐藏出公开页面。</p>
+<section class="card" data-aos="fade-up">
+  <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
+    <h2 style="margin: 0 0 0.5rem 0;">邮箱清单</h2>
+    <p class="muted" style="margin: 0; font-size: 0.95rem;">在此统一管控各邮箱的公开访问权限，或将特定邮箱从前端展示列表中隐藏。</p>
+  </div>
+
+  {% if mailboxes %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>邮箱地址</th>
+            <th>收件概况</th>
+            <th>当前状态</th>
+            <th>权限设置与操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mailbox in mailboxes %}
+            <tr class="mailbox-row">
+              <td>
+                <div style="display: flex; flex-direction: column;">
+                  <strong style="color: var(--text); font-size: 1rem;">{{ mailbox.address_canonical }}</strong>
+                  {% if mailbox.notes %}
+                    <span class="muted" style="font-size: 0.8rem; margin-top: 0.25rem;">{{ mailbox.notes }}</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                  <span style="font-weight: 600;">{{ mailbox.message_count }} 封邮件</span>
+                  <span class="muted" style="font-size: 0.8rem;">最近: {{ mailbox.latest_message_at or "无" }}</span>
+                </div>
+              </td>
+              <td>
+                <div style="display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start;">
+                  <span class="pill {% if mailbox.public_enabled %}pill--success{% else %}pill--neutral{% endif %}" style="font-size: 0.75rem;">
+                    {{ cn_bool(mailbox.public_enabled, yes="已开启公开", no="关闭公开") }}
+                  </span>
+                  {% if mailbox.is_hidden %}
+                    <span class="pill pill--warning" style="font-size: 0.75rem;">前台隐藏</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td style="vertical-align: middle;">
+                <form method="post" action="/admin/mailboxes/{{ mailbox.id }}" class="inline-settings-form">
+                  <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+                  <input type="hidden" name="offset" value="{{ pagination.offset }}" />
+                  <label class="custom-checkbox-label">
+                    <input type="hidden" name="public_enabled" value="0" />
+                    <input type="checkbox" name="public_enabled" value="1" {% if mailbox.public_enabled %}checked{% endif %} />
+                    允许公开
+                  </label>
+                  
+                  <label class="custom-checkbox-label">
+                    <input type="hidden" name="is_hidden" value="0" />
+                    <input type="checkbox" name="is_hidden" value="1" {% if mailbox.is_hidden %}checked{% endif %} />
+                    隐藏
+                  </label>
+
+                  <button class="button button--ghost" type="submit" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; margin-left: auto;">
+                    保存更新
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-panel">
+      <div class="pagination-summary">
+        当前第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页，显示 {{ pagination.start_index }} - {{ pagination.end_index }}，共 {{ pagination.total_count }} 个邮箱
+      </div>
+      <div class="pagination-nav">
+        {% if pagination.has_previous %}
+          <a class="button button--ghost" href="{{ pagination.previous_page_url | safe }}">上一页</a>
+        {% endif %}
+        {% if pagination.has_next %}
+          <a class="button button--ghost" href="{{ pagination.next_page_url | safe }}">下一页</a>
+        {% endif %}
       </div>
     </div>
-    {% if mailboxes %}
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>邮箱地址</th>
-              <th>邮件数</th>
-              <th>最近一封</th>
-              <th>公开访问</th>
-              <th>隐藏</th>
-              <th>备注</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for mailbox in mailboxes %}
-              <tr>
-                <td>{{ mailbox.address_canonical }}</td>
-                <td>{{ mailbox.message_count }}</td>
-                <td>{{ mailbox.latest_message_at or "无" }}</td>
-                <td>{{ cn_bool(mailbox.public_enabled, yes="已开启", no="已关闭") }}</td>
-                <td>{{ cn_bool(mailbox.is_hidden) }}</td>
-                <td>{{ mailbox.notes or "无" }}</td>
-                <td>
-                  <form method="post" action="/admin/mailboxes/{{ mailbox.id }}" class="button-row">
-                    <label class="inline-check">
-                      <input type="hidden" name="public_enabled" value="0" />
-                      <input type="checkbox" name="public_enabled" value="1" {% if mailbox.public_enabled %}checked{% endif %} />
-                      公开访问
-                    </label>
-                    <label class="inline-check">
-                      <input type="hidden" name="is_hidden" value="0" />
-                      <input type="checkbox" name="is_hidden" value="1" {% if mailbox.is_hidden %}checked{% endif %} />
-                      隐藏
-                    </label>
-                    <button class="button button--ghost" type="submit">保存设置</button>
-                  </form>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <div class="empty-state">还没有邮箱记录。</div>
-    {% endif %}
-  </section>
+  {% else %}
+    <div class="empty-state">
+      <p>系统中还没有任何邮箱记录</p>
+    </div>
+  {% endif %}
+</section>
 {% endblock %}
