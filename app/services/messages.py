@@ -27,9 +27,16 @@ class MessageService:
         self,
         mailbox_address: str,
         *,
+        limit: int = 50,
+        offset: int = 0,
         request_ip: str | None = None,
     ) -> dict[str, Any]:
-        return await self._runtime.get_mailbox_view(mailbox_address, request_ip=request_ip)
+        return await self._runtime.get_mailbox_view(
+            mailbox_address,
+            limit=limit,
+            offset=offset,
+            request_ip=request_ip,
+        )
 
     async def get_delivery_detail(
         self,
@@ -73,10 +80,17 @@ class MessageService:
         mailbox_address: str,
         *,
         surface: str,
+        limit: int = 50,
+        offset: int = 0,
         request_ip: str | None = None,
     ) -> dict[str, Any]:
         canonical_mailbox_address = await self._require_public_surface_enabled(mailbox_address, surface)
-        return await self._runtime.get_mailbox_view(canonical_mailbox_address, request_ip=request_ip)
+        return await self._runtime.get_mailbox_view(
+            canonical_mailbox_address,
+            limit=limit,
+            offset=offset,
+            request_ip=request_ip,
+        )
 
     async def get_public_delivery_detail(
         self,

@@ -1,10 +1,39 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from itertools import count
+
 import httpx
 import pytest
 
 from app.config import default_settings
+import app.runtime as runtime_module
 from app.main import create_app
+
+
+def _mail_bytes(subject: str, message_id: str, body: str) -> bytes:
+    return (
+        "From: Sender <sender@example.com>\r\n"
+        "To: Foo <foo@adb.com>\r\n"
+        f"Subject: {subject}\r\n"
+        f"Message-ID: <{message_id}>\r\n"
+        "Date: Sat, 18 Apr 2026 20:00:00 +0000\r\n"
+        "MIME-Version: 1.0\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        f"{body}\r\n"
+    ).encode("utf-8")
+
+
+def _patch_sequenced_utc_now(monkeypatch) -> None:
+    base = datetime(2026, 4, 18, 20, 0, 0, tzinfo=UTC)
+    ticks = count()
+
+    monkeypatch.setattr(
+        runtime_module,
+        "utc_now",
+        lambda: (base + timedelta(seconds=next(ticks))).isoformat().replace("+00:00", "Z"),
+    )
 
 
 @pytest.mark.asyncio
@@ -39,6 +68,85 @@ async def test_mailbox_page_and_public_api_show_received_message(tmp_path, sampl
         assert "sender@example.com" in detail.text
         assert api.status_code == 200
         assert api.json()["items"][0]["delivery_id"] == delivery_id
+
+
+@pytest.mark.asyncio
+async def test_public_mailbox_page_exposes_pagination_links(app_client, runtime, monkeypatch) -> None:
+    _patch_sequenced_utc_now(monkeypatch)
+
+    await runtime.create_domain("adb.com")
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=_mail_bytes("Oldest", "oldest@example.com", "oldest"),
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=_mail_bytes("Middle", "middle@example.com", "middle"),
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=_mail_bytes("Newest", "newest@example.com", "newest"),
+    )
+    await runtime.drain_parser_queue()
+
+    first_page = await app_client.get("/mail/foo@adb.com?limit=1&offset=0")
+    second_page = await app_client.get("/mail/foo@adb.com?limit=1&offset=1")
+
+    assert first_page.status_code == 200
+    assert "Newest" in first_page.text
+    assert "?limit=1&offset=1" in first_page.text
+    assert second_page.status_code == 200
+    assert "Middle" in second_page.text
+    assert "?limit=1&offset=0" in second_page.text
+
+
+@pytest.mark.asyncio
+async def test_public_mailbox_api_returns_pagination_metadata(app_client, runtime, monkeypatch) -> None:
+    _patch_sequenced_utc_now(monkeypatch)
+
+    await runtime.create_domain("adb.com")
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=_mail_bytes("Oldest", "oldest-api@example.com", "oldest"),
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=_mail_bytes("Middle", "middle-api@example.com", "middle"),
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=_mail_bytes("Newest", "newest-api@example.com", "newest"),
+    )
+    await runtime.drain_parser_queue()
+
+    first_page = await app_client.get(
+        "/api/v1/public/mailboxes/foo@adb.com/messages?limit=1&offset=0",
+        headers={"X-API-Key": str(runtime.settings.public_api_key)},
+    )
+    second_page = await app_client.get(
+        "/api/v1/public/mailboxes/foo@adb.com/messages?limit=1&offset=1",
+        headers={"X-API-Key": str(runtime.settings.public_api_key)},
+    )
+
+    assert first_page.status_code == 200
+    assert first_page.json()["limit"] == 1
+    assert first_page.json()["offset"] == 0
+    assert first_page.json()["next_offset"] == 1
+    assert first_page.json()["previous_offset"] is None
+    assert first_page.json()["has_next"] is True
+    assert first_page.json()["has_previous"] is False
+    assert first_page.json()["items"][0]["subject"] == "Newest"
+    assert second_page.status_code == 200
+    assert second_page.json()["offset"] == 1
+    assert second_page.json()["previous_offset"] == 0
+    assert second_page.json()["has_previous"] is True
+    assert second_page.json()["items"][0]["subject"] == "Middle"
 
 
 @pytest.mark.asyncio

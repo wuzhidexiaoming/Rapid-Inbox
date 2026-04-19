@@ -51,6 +51,34 @@ def _render_template(request: Request, template_name: str, context: dict[str, An
     return response
 
 
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _coerce_text_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        raw_values = value.replace("\n", ",").split(",")
+    elif isinstance(value, (list, tuple)):
+        raw_values = [str(item) for item in value]
+    else:
+        raw_values = [str(value)]
+    return [item.strip() for item in raw_values if item and item.strip()]
+
+
+def _coerce_int_list(value: Any) -> list[int]:
+    return [int(item) for item in _coerce_text_list(value)]
+
+
 def require_admin_key(
     request: Request,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
@@ -279,6 +307,35 @@ async def create_domain(
     return created
 
 
+@router.patch("/api/v1/admin/mailboxes/{mailbox_id}")
+async def update_mailbox(
+    mailbox_id: int,
+    payload: dict[str, Any],
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "mailboxes.write")
+    await _record_admin_key_usage(request, admin)
+
+    updates: dict[str, Any] = {}
+    if "public_enabled" in payload:
+        updates["public_enabled"] = _coerce_bool(payload["public_enabled"])
+    if "is_hidden" in payload:
+        updates["is_hidden"] = _coerce_bool(payload["is_hidden"])
+    if not updates:
+        raise HTTPException(status_code=422, detail="public_enabled or is_hidden is required")
+
+    try:
+        updated = await request.app.state.runtime.mailboxes.update_mailbox(mailbox_id, updates)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    await _write_audit_best_effort(request, admin, "mailboxes.update", "mailbox", str(mailbox_id), "success")
+    return updated
+
+
 @router.post("/api/v1/admin/messages/{message_id}/reparse", status_code=status.HTTP_202_ACCEPTED)
 async def reparse_message(
     message_id: str,
@@ -331,3 +388,58 @@ async def update_settings(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await _write_audit_best_effort(request, admin, "settings.update", "system_settings", None, "success")
     return updated
+
+
+@router.post("/api/v1/admin/api-keys", status_code=status.HTTP_201_CREATED)
+async def create_api_key(
+    payload: dict[str, Any],
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "api_keys.write")
+    await _record_admin_key_usage(request, admin)
+
+    name = str(payload.get("name", "")).strip()
+    kind = str(payload.get("kind", "")).strip()
+    scopes = _coerce_text_list(payload.get("scopes"))
+    domain_ids = _coerce_int_list(payload.get("domain_ids"))
+    mailbox_patterns = _coerce_text_list(payload.get("mailbox_patterns"))
+
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+    if not kind:
+        raise HTTPException(status_code=422, detail="kind is required")
+    if not scopes:
+        raise HTTPException(status_code=422, detail="scopes are required")
+
+    try:
+        created = await request.app.state.runtime.api_keys.create_key(
+            name=name,
+            kind=kind,
+            scopes=scopes,
+            domain_ids=domain_ids,
+            mailbox_patterns=mailbox_patterns,
+        )
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    await _write_audit_best_effort(request, admin, "api_keys.create", "api_key", str(created["id"]), "success")
+    return created
+
+
+@router.post("/api/v1/admin/api-keys/{api_key_id}/revoke")
+async def revoke_api_key(
+    api_key_id: int,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "api_keys.write")
+    await _record_admin_key_usage(request, admin)
+
+    try:
+        revoked = await request.app.state.runtime.api_keys.revoke_key(api_key_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    await _write_audit_best_effort(request, admin, "api_keys.revoke", "api_key", str(api_key_id), "success")
+    return revoked

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ mailbox_address }} - Rapid Inbox</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 0 auto;
+        padding: 1.5rem;
+        max-width: 56rem;
+      }
+
+      .muted {
+        color: #6b7280;
+      }
+
+      .pager {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+      }
+
+      .pager a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.4rem;
+        padding: 0.35rem 0.75rem;
+        border: 1px solid #d0d7de;
+        border-radius: 0.5rem;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>{{ mailbox_address }}</h1>
+    {% if items %}
+      <p class="muted">Showing {{ start_index }}-{{ end_index }} of {{ message_count }}</p>
+      <ul>
+        {% for item in items %}
+          <li>
+            <a href="/mail/{{ mailbox_address }}/{{ item.delivery_id }}">{{ item.subject or "(parsing)" }}</a>
+            <span>{{ item.from_addr or "unknown" }}</span>
+            <span>{{ item.parse_status }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+      <nav class="pager" aria-label="Mailbox pagination">
+        {% if has_previous %}
+          <a href="/mail/{{ mailbox_address }}?limit={{ limit }}&offset={{ previous_offset }}">Newer</a>
+        {% endif %}
+        {% if has_next %}
+          <a href="/mail/{{ mailbox_address }}?limit={{ limit }}&offset={{ next_offset }}">Older</a>
+        {% endif %}
+      </nav>
+    {% else %}
+      <p class="muted">No messages yet.</p>
+    {% endif %}
+  </body>
+</html>

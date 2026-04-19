@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.auth.api_keys import set_active_permission_context
@@ -30,6 +30,8 @@ async def list_mailbox_messages(
     mailbox_address: str,
     request: Request,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    limit: int = Query(default=50, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
 ) -> dict:
     require_public_api_key(request, x_api_key)
     request_ip = request.client.host if request.client is not None else None
@@ -37,6 +39,8 @@ async def list_mailbox_messages(
         return await _message_service(request).get_public_mailbox_view(
             mailbox_address,
             surface="api",
+            limit=limit,
+            offset=offset,
             request_ip=request_ip,
         )
     except LookupError as exc:

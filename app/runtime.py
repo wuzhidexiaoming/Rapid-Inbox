@@ -471,7 +471,14 @@ class RapidInboxRuntime:
             ).fetchall()
         return [str(row["id"]) for row in rows]
 
-    async def get_mailbox_view(self, mailbox_address: str, *, limit: int = 50, request_ip: str | None = None) -> dict[str, Any]:
+    async def get_mailbox_view(
+        self,
+        mailbox_address: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        request_ip: str | None = None,
+    ) -> dict[str, Any]:
         match = self.domains.match_address(mailbox_address)
         if match is None:
             raise LookupError("mailbox domain not managed")
@@ -491,16 +498,27 @@ class RapidInboxRuntime:
                 FROM message_deliveries AS d
                 JOIN messages AS m ON m.id = d.message_id
                 WHERE d.mailbox_id = ? AND d.status = 'active'
-                ORDER BY d.delivered_at DESC
-                LIMIT ?
+                ORDER BY d.delivered_at DESC, d.rowid DESC
+                LIMIT ? OFFSET ?
                 """,
-                (mailbox["id"], limit),
+                (mailbox["id"], limit, offset),
             ).fetchall()
+
+        items = [dict(row) for row in rows]
+        message_count = int(mailbox["message_count"])
+        has_previous = offset > 0
+        has_next = offset + len(items) < message_count
 
         return {
             "mailbox": match.address_canonical,
-            "items": [dict(row) for row in rows],
-            "message_count": mailbox["message_count"],
+            "items": items,
+            "message_count": message_count,
+            "limit": limit,
+            "offset": offset,
+            "has_previous": has_previous,
+            "has_next": has_next,
+            "previous_offset": max(offset - limit, 0) if has_previous else None,
+            "next_offset": offset + limit if has_next else None,
         }
 
     async def get_delivery_detail(self, mailbox_address: str, delivery_id: str, *, request_ip: str | None = None) -> dict[str, Any]:

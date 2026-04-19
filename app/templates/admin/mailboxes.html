@@ -19,6 +19,7 @@
               <th>Public</th>
               <th>Hidden</th>
               <th>Notes</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -30,6 +31,21 @@
                 <td>{{ "Yes" if mailbox.public_enabled else "No" }}</td>
                 <td>{{ "Yes" if mailbox.is_hidden else "No" }}</td>
                 <td>{{ mailbox.notes or "None" }}</td>
+                <td>
+                  <form method="post" action="/admin/mailboxes/{{ mailbox.id }}" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+                    <label>
+                      <input type="hidden" name="public_enabled" value="0" />
+                      <input type="checkbox" name="public_enabled" value="1" {% if mailbox.public_enabled %}checked{% endif %} />
+                      Public
+                    </label>
+                    <label>
+                      <input type="hidden" name="is_hidden" value="0" />
+                      <input type="checkbox" name="is_hidden" value="1" {% if mailbox.is_hidden %}checked{% endif %} />
+                      Hidden
+                    </label>
+                    <button class="button button--ghost" type="submit">Save</button>
+                  </form>
+                </td>
               </tr>
             {% endfor %}
           </tbody>

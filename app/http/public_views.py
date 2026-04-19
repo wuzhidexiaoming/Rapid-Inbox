@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
 from app.services.attachments import AttachmentService
@@ -20,10 +20,20 @@ def _attachment_service(request: Request) -> AttachmentService:
 
 
 @router.get("/mail/{mailbox_address}", response_class=HTMLResponse)
-async def mailbox_page(mailbox_address: str, request: Request) -> HTMLResponse:
+async def mailbox_page(
+    mailbox_address: str,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> HTMLResponse:
     service = _message_service(request)
     try:
-        mailbox = await service.get_public_mailbox_view(mailbox_address, surface="web")
+        mailbox = await service.get_public_mailbox_view(
+            mailbox_address,
+            surface="web",
+            limit=limit,
+            offset=offset,
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return request.app.state.templates.TemplateResponse(
@@ -32,6 +42,25 @@ async def mailbox_page(mailbox_address: str, request: Request) -> HTMLResponse:
         {
             "mailbox_address": mailbox["mailbox"],
             "items": mailbox["items"],
+            "message_count": mailbox["message_count"],
+            "limit": mailbox["limit"],
+            "offset": mailbox["offset"],
+            "start_index": offset + 1 if mailbox["items"] else 0,
+            "end_index": offset + len(mailbox["items"]),
+            "has_previous": mailbox["has_previous"],
+            "has_next": mailbox["has_next"],
+            "previous_offset": mailbox["previous_offset"],
+            "next_offset": mailbox["next_offset"],
+            "previous_page_url": (
+                f"/mail/{mailbox['mailbox']}?limit={mailbox['limit']}&offset={mailbox['previous_offset']}"
+                if mailbox["has_previous"]
+                else None
+            ),
+            "next_page_url": (
+                f"/mail/{mailbox['mailbox']}?limit={mailbox['limit']}&offset={mailbox['next_offset']}"
+                if mailbox["has_next"]
+                else None
+            ),
         },
     )
 

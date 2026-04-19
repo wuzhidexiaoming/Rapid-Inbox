@@ -191,6 +191,41 @@ class ApiKeyService:
 
         return await self.writer.execute(operation)
 
+    async def revoke_key(self, api_key_id: int) -> dict[str, Any]:
+        revoked_at = utc_now()
+
+        def operation(connection: sqlite3.Connection) -> dict[str, Any]:
+            row = connection.execute(
+                """
+                SELECT id, revoked_at
+                FROM api_keys
+                WHERE id = ?
+                """,
+                (api_key_id,),
+            ).fetchone()
+            if row is None:
+                raise LookupError("api key not found")
+
+            connection.execute(
+                """
+                UPDATE api_keys
+                SET status = 'revoked',
+                    revoked_at = COALESCE(revoked_at, ?)
+                WHERE id = ?
+                """,
+                (revoked_at, api_key_id),
+            )
+            return {
+                "id": int(row["id"]),
+                "status": "revoked",
+                "revoked_at": str(row["revoked_at"] or revoked_at),
+            }
+
+        revoked = await self.writer.execute(operation)
+        with self._usage_lock:
+            self._usage_windows.pop(api_key_id, None)
+        return revoked
+
     def authenticate_plain_text(self, plain_text: str, *, request_ip: str | None = None) -> PermissionContext:
         return self._authenticate_plain_text(plain_text, transport="header", request_ip=request_ip)
 

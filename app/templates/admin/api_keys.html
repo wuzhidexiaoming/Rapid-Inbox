@@ -1,6 +1,21 @@
 {% extends "admin/base.html" %}
 
 {% block content %}
+  {% if error %}
+    <div class="notice notice--error">{{ error }}</div>
+  {% endif %}
+  {% if created_api_key %}
+    <section class="card">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Created</p>
+          <h2>{{ created_api_key.name }}</h2>
+        </div>
+      </div>
+      <p class="muted">Copy this secret now. It is only shown once.</p>
+      <pre>{{ created_api_key.plain_text }}</pre>
+    </section>
+  {% endif %}
   <section class="card">
     <div class="section-title">
       <div>
@@ -8,6 +23,35 @@
         <h2>Administrative keys</h2>
       </div>
     </div>
+    <form method="post" action="/admin/api-keys" style="display:grid; gap:0.75rem; max-width:42rem; margin-bottom:1rem;">
+      <label>
+        <div class="muted">Name</div>
+        <input type="text" name="name" value="New API key" />
+      </label>
+      <label>
+        <div class="muted">Kind</div>
+        <select name="kind">
+          <option value="admin" selected>admin</option>
+          <option value="service">service</option>
+          <option value="public">public</option>
+        </select>
+      </label>
+      <label>
+        <div class="muted">Scopes</div>
+        <input type="text" name="scopes" value="system.read, system.write" />
+      </label>
+      <label>
+        <div class="muted">Domain IDs</div>
+        <input type="text" name="domain_ids" placeholder="Comma-separated domain IDs" />
+      </label>
+      <label>
+        <div class="muted">Mailbox patterns</div>
+        <input type="text" name="mailbox_patterns" placeholder="Comma-separated mailbox patterns" />
+      </label>
+      <div class="button-row">
+        <button class="button" type="submit">Create key</button>
+      </div>
+    </form>
     {% if api_keys %}
       <div class="table-wrap">
         <table class="table">
@@ -20,6 +64,7 @@
               <th>Domain grants</th>
               <th>Mailbox grants</th>
               <th>Last used</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -41,6 +86,15 @@
                 <td>{{ api_key.domain_count }}</td>
                 <td>{{ api_key.mailbox_count }}</td>
                 <td>{{ api_key.last_used_at or "Never" }}</td>
+                <td>
+                  {% if api_key.status == 'active' %}
+                    <form method="post" action="/admin/api-keys/{{ api_key.id }}/revoke">
+                      <button class="button button--ghost" type="submit">Revoke</button>
+                    </form>
+                  {% else %}
+                    <span class="muted">No actions</span>
+                  {% endif %}
+                </td>
               </tr>
             {% endfor %}
           </tbody>

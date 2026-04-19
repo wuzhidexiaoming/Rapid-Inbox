@@ -76,6 +76,64 @@ async def test_admin_api_mutation_succeeds_when_audit_logging_fails(admin_client
 
 
 @pytest.mark.asyncio
+async def test_admin_api_can_update_mailbox_visibility(admin_client, runtime, sample_email_bytes: bytes) -> None:
+    await runtime.create_domain("adb.com")
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=sample_email_bytes,
+    )
+    await runtime.drain_parser_queue()
+
+    mailbox = runtime.mailboxes.list_mailboxes()["items"][0]
+    response = await admin_client.patch(
+        f"/api/v1/admin/mailboxes/{mailbox['id']}",
+        json={"public_enabled": False, "is_hidden": True},
+    )
+    public_response = await admin_client.get("/mail/foo@adb.com")
+
+    updated = runtime.mailboxes.get_mailbox(mailbox["id"])
+
+    assert response.status_code == 200
+    assert response.json()["public_enabled"] is False
+    assert response.json()["is_hidden"] is True
+    assert updated["public_enabled"] is False
+    assert updated["is_hidden"] is True
+    assert public_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_admin_api_can_create_and_revoke_api_keys_through_http(admin_client, runtime) -> None:
+    await runtime.create_domain("adb.com")
+
+    created = await admin_client.post(
+        "/api/v1/admin/api-keys",
+        json={
+            "name": "read-domains",
+            "kind": "admin",
+            "scopes": ["domains.read"],
+        },
+    )
+    created_payload = created.json()
+    auth_response = await admin_client.get(
+        "/api/v1/admin/domains",
+        headers={"X-API-Key": created_payload["plain_text"]},
+    )
+    revoked = await admin_client.post(f"/api/v1/admin/api-keys/{created_payload['id']}/revoke")
+    revoked_response = await admin_client.get(
+        "/api/v1/admin/domains",
+        headers={"X-API-Key": created_payload["plain_text"]},
+    )
+
+    assert created.status_code == 201
+    assert created_payload["status"] == "active"
+    assert auth_response.status_code == 200
+    assert revoked.status_code == 200
+    assert revoked.json()["status"] == "revoked"
+    assert revoked_response.status_code == 401
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "query_string",
     [

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -36,6 +37,22 @@ def _parse_form_body(body: bytes) -> dict[str, str]:
         return {}
     parsed = parse_qs(body.decode("utf-8", errors="ignore"), keep_blank_values=True)
     return {key: values[-1] for key, values in parsed.items() if values}
+
+
+def _form_bool(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_csv_values(value: str | None) -> list[str]:
+    if value is None:
+        return []
+    return [item.strip() for item in value.replace("\n", ",").split(",") if item.strip()]
+
+
+def _parse_int_values(value: str | None) -> list[int]:
+    return [int(item) for item in _parse_csv_values(value)]
 
 
 def _count(connection, query: str, params: tuple[Any, ...] = ()) -> int:
@@ -404,6 +421,29 @@ async def mailboxes_page(request: Request) -> Response:
     )
 
 
+@router.post("/admin/mailboxes/{mailbox_id}")
+async def update_mailbox_visibility(mailbox_id: int, request: Request) -> Response:
+    admin_or_response = await _require_admin(request)
+    if isinstance(admin_or_response, Response):
+        return admin_or_response
+
+    form = _parse_form_body(await request.body())
+    updates: dict[str, Any] = {}
+    if "public_enabled" in form:
+        updates["public_enabled"] = _form_bool(form.get("public_enabled"))
+    if "is_hidden" in form:
+        updates["is_hidden"] = _form_bool(form.get("is_hidden"))
+
+    try:
+        await request.app.state.runtime.mailboxes.update_mailbox(mailbox_id, updates)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return RedirectResponse("/admin/mailboxes", status_code=status.HTTP_303_SEE_OTHER)
+
+
 @router.get("/admin/messages", response_class=HTMLResponse)
 async def messages_page(request: Request) -> Response:
     admin_or_response = await _require_admin(request)
@@ -434,8 +474,87 @@ async def api_keys_page(request: Request) -> Response:
             "page_title": "API Keys",
             "admin": admin_or_response,
             "api_keys": _list_api_keys(request),
+            "created_api_key": None,
+            "error": None,
         },
     )
+
+
+@router.post("/admin/api-keys", response_class=HTMLResponse)
+async def create_api_key(request: Request) -> Response:
+    admin_or_response = await _require_admin(request)
+    if isinstance(admin_or_response, Response):
+        return admin_or_response
+
+    form = _parse_form_body(await request.body())
+    name = form.get("name", "").strip()
+    kind = form.get("kind", "admin").strip() or "admin"
+    scopes = _parse_csv_values(form.get("scopes"))
+    domain_ids = _parse_int_values(form.get("domain_ids"))
+    mailbox_patterns = _parse_csv_values(form.get("mailbox_patterns"))
+
+    if not name:
+        return _render(
+            request,
+            "admin/api_keys.html",
+            {
+                "page_title": "API Keys",
+                "admin": admin_or_response,
+                "api_keys": _list_api_keys(request),
+                "created_api_key": None,
+                "error": "Name is required.",
+        },
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+    )
+
+    try:
+        created = await request.app.state.runtime.api_keys.create_key(
+            name=name,
+            kind=kind,
+            scopes=scopes,
+            domain_ids=domain_ids,
+            mailbox_patterns=mailbox_patterns,
+        )
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        return _render(
+            request,
+            "admin/api_keys.html",
+            {
+                "page_title": "API Keys",
+                "admin": admin_or_response,
+                "api_keys": _list_api_keys(request),
+                "created_api_key": None,
+                "error": str(exc),
+            },
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    return _render(
+        request,
+        "admin/api_keys.html",
+        {
+            "page_title": "API Keys",
+            "admin": admin_or_response,
+            "api_keys": _list_api_keys(request),
+            "created_api_key": created,
+            "error": None,
+        },
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("/admin/api-keys/{api_key_id}/revoke")
+async def revoke_api_key(api_key_id: int, request: Request) -> Response:
+    admin_or_response = await _require_admin(request)
+    if isinstance(admin_or_response, Response):
+        return admin_or_response
+
+    try:
+        await request.app.state.runtime.api_keys.revoke_key(api_key_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return RedirectResponse("/admin/api-keys", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/admin/audit", response_class=HTMLResponse)
