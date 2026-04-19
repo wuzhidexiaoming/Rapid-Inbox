@@ -557,6 +557,42 @@
     updateMessageCount(1);
   }
 
+  // 统一复制函数，兼容不支持 navigator.clipboard 的情况（如非 HTTPS 环境）
+  async function copyToClipboardFallback(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    } else {
+      return new Promise((resolve, reject) => {
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.style.position = "fixed";
+          textArea.style.top = "0";
+          textArea.style.left = "0";
+          textArea.style.width = "2em";
+          textArea.style.height = "2em";
+          textArea.style.padding = "0";
+          textArea.style.border = "none";
+          textArea.style.outline = "none";
+          textArea.style.boxShadow = "none";
+          textArea.style.background = "transparent";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          if (successful) {
+            resolve();
+          } else {
+            reject(new Error("Fallback: copy command was unsuccessful"));
+          }
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+  }
+
   // 复制验证码逻辑
   document.addEventListener("click", async (event) => {
     const button = event.target.closest(".copy-code-btn");
@@ -568,11 +604,12 @@
 
     button.disabled = true;
     try {
-      await navigator.clipboard.writeText(code);
+      await copyToClipboardFallback(code);
       button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; margin-right:4px; vertical-align:text-bottom;"><polyline points="20 6 9 17 4 12"></polyline></svg> 已复制';
       button.classList.remove("is-failed");
       button.classList.add("is-copied");
     } catch (error) {
+      console.error("Failed to copy code", error);
       button.textContent = "复制失败";
       button.classList.remove("is-copied");
       button.classList.add("is-failed");
@@ -591,7 +628,7 @@
     copyAddressBtn.addEventListener("click", async () => {
       const addressText = document.getElementById("mailbox-address-text").innerText;
       try {
-        await navigator.clipboard.writeText(addressText);
+        await copyToClipboardFallback(addressText);
         copyAddressBtn.classList.add("copied");
         copyAddressBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
         
