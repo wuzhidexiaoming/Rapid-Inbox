@@ -33,6 +33,17 @@ class ParseQueue:
     async def drain(self) -> None:
         await self._queue.join()
 
+    def clear_pending(self) -> int:
+        cleared = 0
+        while True:
+            try:
+                task = self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return cleared
+            if task is not None:
+                cleared += 1
+            self._queue.task_done()
+
     async def _run(self) -> None:
         while True:
             task = await self._queue.get()

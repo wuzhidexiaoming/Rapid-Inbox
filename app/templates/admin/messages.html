@@ -1,4 +1,5 @@
 {% extends "admin/base.html" %}
+{% from "admin/_pagination.html" import pagination_nav %}
 
 {% block head %}
 <style>
@@ -158,14 +159,7 @@
       <div class="pagination-summary">
         当前第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页，显示 {{ pagination.start_index }} - {{ pagination.end_index }}，共 {{ pagination.total_count }} 封邮件
       </div>
-      <div class="pagination-nav">
-        {% if pagination.has_previous %}
-          <a class="button button--ghost" href="{{ pagination.previous_page_url | safe }}">上一页</a>
-        {% endif %}
-        {% if pagination.has_next %}
-          <a class="button button--ghost" href="{{ pagination.next_page_url | safe }}">下一页</a>
-        {% endif %}
-      </div>
+      {{ pagination_nav(pagination) }}
     </div>
   {% else %}
     <div class="empty-state" data-aos="zoom-in" data-aos-delay="100">

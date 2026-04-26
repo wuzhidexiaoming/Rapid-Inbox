@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import json
 import sqlite3
 import uuid
@@ -41,6 +42,7 @@ class RapidInboxRuntime:
         self.system_settings = SettingsService(self)
         self.parser = MessageParser(self.storage)
         self.parse_queue = ParseQueue(self._parse_message)
+        self._mail_store_lock = asyncio.Lock()
         self.live_state = LiveState()
         self.recovery = RecoveryScanner(self)
 
@@ -78,8 +80,50 @@ class RapidInboxRuntime:
             if hasattr(self.settings, key):
                 setattr(self.settings, key, value)
 
+    async def clear_all_mail(self) -> dict[str, int]:
+        async with self._mail_store_lock:
+            dropped_parse_tasks = self.parse_queue.clear_pending()
+            await self.parse_queue.stop()
+            try:
+                result = await self.writer.execute(self._clear_mail_tables)
+                self.storage.clear_mail_data()
+                self.live_state.clear()
+                result["dropped_parse_tasks"] = dropped_parse_tasks
+                return result
+            finally:
+                await self.parse_queue.start()
+
     def list_audit_logs(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
         return self.audit.list_logs(limit=limit, offset=offset)
+
+    def _clear_mail_tables(self, connection: sqlite3.Connection) -> dict[str, int]:
+        messages_count = int(connection.execute("SELECT COUNT(*) AS count FROM messages").fetchone()["count"])
+        deliveries_count = int(connection.execute("SELECT COUNT(*) AS count FROM message_deliveries").fetchone()["count"])
+        mailboxes_count = int(connection.execute("SELECT COUNT(*) AS count FROM mailboxes").fetchone()["count"])
+        attachments_count = int(connection.execute("SELECT COUNT(*) AS count FROM attachments").fetchone()["count"])
+        smtp_sessions_count = int(connection.execute("SELECT COUNT(*) AS count FROM smtp_sessions").fetchone()["count"])
+        smtp_events_count = int(connection.execute("SELECT COUNT(*) AS count FROM smtp_events").fetchone()["count"])
+        total_bytes = int(
+            connection.execute("SELECT COALESCE(SUM(raw_size_bytes), 0) AS total FROM messages").fetchone()["total"]
+        )
+
+        connection.execute("DELETE FROM attachments")
+        connection.execute("DELETE FROM message_deliveries")
+        connection.execute("DELETE FROM messages")
+        connection.execute("DELETE FROM mailboxes")
+        connection.execute("DELETE FROM smtp_events")
+        connection.execute("DELETE FROM smtp_sessions")
+        connection.execute("DELETE FROM sqlite_sequence WHERE name = 'mailboxes'")
+        connection.execute("DELETE FROM sqlite_sequence WHERE name = 'smtp_events'")
+        return {
+            "messages": messages_count,
+            "deliveries": deliveries_count,
+            "mailboxes": mailboxes_count,
+            "attachments": attachments_count,
+            "smtp_sessions": smtp_sessions_count,
+            "smtp_events": smtp_events_count,
+            "raw_size_bytes": total_bytes,
+        }
 
     async def ensure_smtp_session(self, session_id: str, session: Any, *, last_rcpt_to: str | None = None) -> None:
         now = utc_now()
@@ -166,6 +210,22 @@ class RapidInboxRuntime:
         await self.writer.execute(operation)
 
     async def accept_message(
+        self,
+        *,
+        rcpt_tos: list[str],
+        envelope_from: str | None,
+        content: bytes,
+        smtp_session_id: str | None = None,
+    ) -> str:
+        async with self._mail_store_lock:
+            return await self._accept_message_without_mail_store_lock(
+                rcpt_tos=rcpt_tos,
+                envelope_from=envelope_from,
+                content=content,
+                smtp_session_id=smtp_session_id,
+            )
+
+    async def _accept_message_without_mail_store_lock(
         self,
         *,
         rcpt_tos: list[str],

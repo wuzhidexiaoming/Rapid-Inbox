@@ -1,4 +1,5 @@
 {% extends "admin/base.html" %}
+{% from "admin/_pagination.html" import pagination_nav %}
 
 {% block head %}
 <style>
@@ -369,14 +370,7 @@
         <div class="pagination-summary">
           当前第 {{ sessions_pagination.current_page }} / {{ sessions_pagination.total_pages }} 页，显示 {{ sessions_pagination.start_index }} - {{ sessions_pagination.end_index }}，共 {{ sessions_pagination.total_count }} 个会话
         </div>
-        <div class="pagination-nav">
-          {% if sessions_pagination.has_previous %}
-            <a class="button button--ghost" href="{{ sessions_pagination.previous_page_url | safe }}">上一页</a>
-          {% endif %}
-          {% if sessions_pagination.has_next %}
-            <a class="button button--ghost" href="{{ sessions_pagination.next_page_url | safe }}">下一页</a>
-          {% endif %}
-        </div>
+        {{ pagination_nav(sessions_pagination) }}
       </div>
     {% else %}
       <div class="empty-state" style="border: 1px dashed var(--border);">

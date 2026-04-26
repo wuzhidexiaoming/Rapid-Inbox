@@ -83,6 +83,7 @@ _RESOURCE_TYPE_LABELS = {
     "domain": "域名",
     "mailbox": "邮箱",
     "message": "邮件",
+    "mail_store": "邮件存储",
     "api_key": "API 密钥",
     "system_settings": "系统设置",
 }
@@ -91,6 +92,7 @@ _ACTION_LABELS = {
     "domains.dns_check": "执行 DNS 检查",
     "domains.create": "创建域名",
     "mailboxes.update": "更新邮箱",
+    "mail.clear_all": "清除所有邮件",
     "messages.reparse": "重新解析邮件",
     "settings.update": "更新系统设置",
     "api_keys.create": "创建 API 密钥",

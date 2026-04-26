@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from itertools import count
 import re
+from types import SimpleNamespace
 
 import pytest
 
@@ -147,12 +148,25 @@ async def test_admin_domains_page_can_create_domain_via_form(app_client, runtime
 @pytest.mark.asyncio
 async def test_admin_mailboxes_page_can_toggle_visibility_via_form(app_client, runtime, sample_email_bytes: bytes) -> None:
     await runtime.create_domain("adb.com")
+    await runtime.ensure_smtp_session(
+        "smtp_clear_all",
+        SimpleNamespace(peer=("127.0.0.1", 2525), host_name="localhost", ssl=None),
+    )
     await runtime.accept_message(
         rcpt_tos=["foo@adb.com"],
         envelope_from="sender@example.com",
         content=sample_email_bytes,
+        smtp_session_id="smtp_clear_all",
     )
     await runtime.drain_parser_queue()
+    await runtime.live_state.publish(
+        {
+            "type": "queued",
+            "ts": "2026-04-18T20:00:00Z",
+            "session_id": "smtp_clear_all",
+            "message_id": "fixture",
+        }
+    )
 
     login = await app_client.post(
         "/admin/login",
@@ -231,6 +245,94 @@ async def test_admin_api_keys_page_can_create_and_revoke_via_form(app_client, ru
     assert revoked.status_code == 200
     assert after["status"] == "revoked"
     assert denied.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_settings_page_can_clear_all_mail(app_client, runtime, sample_email_bytes: bytes) -> None:
+    await runtime.create_domain("adb.com")
+    await runtime.ensure_smtp_session(
+        "smtp_clear_all",
+        SimpleNamespace(peer=("127.0.0.1", 2525), host_name="localhost", ssl=None),
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=sample_email_bytes,
+        smtp_session_id="smtp_clear_all",
+    )
+    await runtime.drain_parser_queue()
+    await runtime.live_state.publish(
+        {
+            "type": "queued",
+            "ts": "2026-04-18T20:00:00Z",
+            "session_id": "smtp_clear_all",
+            "message_id": "fixture",
+        }
+    )
+
+    assert any(path.is_file() for path in runtime.settings.raw_dir.rglob("*"))
+    assert any(path.is_file() for path in runtime.settings.manifests_dir.rglob("*"))
+
+    await app_client.post(
+        "/admin/login",
+        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
+        follow_redirects=True,
+    )
+    settings_page = await app_client.get("/admin/settings")
+    response = await app_client.post(
+        "/admin/settings/clear-mail",
+        data={"confirm": "clear-all-mail"},
+    )
+
+    assert settings_page.status_code == 200
+    assert "清除所有邮件" in settings_page.text
+    assert "近期网络会话" in settings_page.text
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/settings?mail_cleared=1&cleared_messages=1&cleared_mailboxes=1&cleared_sessions=1"
+    )
+
+    with connect_database(runtime.settings.database_path) as connection:
+        counts = {
+            "domains": connection.execute("SELECT COUNT(*) AS count FROM domains").fetchone()["count"],
+            "messages": connection.execute("SELECT COUNT(*) AS count FROM messages").fetchone()["count"],
+            "deliveries": connection.execute("SELECT COUNT(*) AS count FROM message_deliveries").fetchone()["count"],
+            "mailboxes": connection.execute("SELECT COUNT(*) AS count FROM mailboxes").fetchone()["count"],
+            "attachments": connection.execute("SELECT COUNT(*) AS count FROM attachments").fetchone()["count"],
+            "smtp_sessions": connection.execute("SELECT COUNT(*) AS count FROM smtp_sessions").fetchone()["count"],
+            "smtp_events": connection.execute("SELECT COUNT(*) AS count FROM smtp_events").fetchone()["count"],
+        }
+        audit = connection.execute(
+            "SELECT action, details_json FROM audit_logs WHERE action = ?",
+            ("mail.clear_all",),
+        ).fetchone()
+
+    assert counts == {
+        "domains": 1,
+        "messages": 0,
+        "deliveries": 0,
+        "mailboxes": 0,
+        "attachments": 0,
+        "smtp_sessions": 0,
+        "smtp_events": 0,
+    }
+    assert audit is not None
+    assert '"messages": 1' in audit["details_json"]
+    assert '"smtp_sessions": 1' in audit["details_json"]
+    assert runtime.live_state.snapshot() == []
+    assert not any(path.is_file() for path in runtime.settings.raw_dir.rglob("*"))
+    assert not any(path.is_file() for path in runtime.settings.manifests_dir.rglob("*"))
+
+    public_mailbox = await app_client.get("/mail/foo@adb.com")
+    assert public_mailbox.status_code == 200
+    assert "暂无邮件" in public_mailbox.text
+
+    with connect_database(runtime.settings.database_path) as connection:
+        mailbox_count = connection.execute("SELECT COUNT(*) AS count FROM mailboxes").fetchone()["count"]
+        message_count = connection.execute("SELECT COUNT(*) AS count FROM messages").fetchone()["count"]
+
+    assert mailbox_count == 1
+    assert message_count == 0
 
 
 @pytest.mark.asyncio

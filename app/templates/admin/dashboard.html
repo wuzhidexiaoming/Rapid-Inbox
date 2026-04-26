@@ -3,7 +3,7 @@
 {% block head %}
 <style>
   .welcome-banner {
-    background: linear-gradient(to right, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+    background: var(--surface-soft);
     border: 1px solid rgba(59, 130, 246, 0.2);
     border-radius: 1rem;
     padding: 2rem;
@@ -45,7 +45,7 @@
     bottom: -20px;
     width: 100px;
     height: 100px;
-    background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+    background: var(--primary-soft);
     opacity: 0.5;
     pointer-events: none;
   }
@@ -65,7 +65,7 @@
     font-size: 2.5rem;
     font-weight: 800;
     margin: 0.5rem 0;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
     color: var(--text);
   }
   

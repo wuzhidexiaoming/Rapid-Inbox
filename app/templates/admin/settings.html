@@ -65,6 +65,82 @@
     margin-top: auto;
     padding-top: 1rem;
   }
+
+  .settings-alert {
+    margin: 0 0 1rem;
+    border: 1px solid #b7dfc6;
+    border-radius: 8px;
+    background: #ecfdf3;
+    color: var(--success);
+    padding: 0.85rem 1rem;
+    font-weight: 680;
+  }
+
+  .danger-zone {
+    margin-top: 1.5rem;
+    border-color: #efc4be;
+  }
+
+  .danger-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  .mail-stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 1rem 0 0;
+  }
+
+  .mail-stat {
+    min-width: 120px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-soft);
+    padding: 0.75rem;
+  }
+
+  .mail-stat strong,
+  .mail-stat span {
+    display: block;
+  }
+
+  .mail-stat strong {
+    font-size: 1.2rem;
+  }
+
+  .mail-stat span {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .danger-form {
+    display: grid;
+    min-width: min(100%, 280px);
+    gap: 0.85rem;
+  }
+
+  .danger-confirm {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  .danger-confirm input {
+    margin-top: 0.18rem;
+  }
+
+  @media (max-width: 760px) {
+    .danger-layout {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -74,6 +150,12 @@
     <h2 style="margin: 0 0 0.5rem 0;">系统运行参数</h2>
     <p class="muted" style="margin: 0; font-size: 0.95rem;">当前环境的关键运行配置，包含接收限制与后台会话参数。</p>
   </div>
+
+  {% if mail_clear_result %}
+    <div class="settings-alert">
+      已清除 {{ mail_clear_result.messages }} 封邮件、{{ mail_clear_result.mailboxes }} 个邮箱记录和 {{ mail_clear_result.smtp_sessions }} 个近期网络会话。
+    </div>
+  {% endif %}
 
   {% if settings_items %}
     <div class="settings-grid">
@@ -98,5 +180,47 @@
       <p>当前没有可展示的系统设置</p>
     </div>
   {% endif %}
+</section>
+
+<section class="card danger-zone">
+  <div class="danger-layout">
+    <div>
+      <p class="eyebrow">危险操作</p>
+      <h2 style="margin-bottom: 0.5rem;">清除所有邮件</h2>
+      <p class="muted" style="margin: 0;">
+        清除所有已接收邮件、投递记录、附件记录、邮箱记录和近期网络会话，并删除 raw、text、html、attachments、manifests 中的邮件文件。域名、管理员、API 密钥和审计日志会保留。
+      </p>
+      <div class="mail-stat-row" aria-label="当前邮件数据">
+        <div class="mail-stat">
+          <strong>{{ mail_store_stats.messages }}</strong>
+          <span>邮件</span>
+        </div>
+        <div class="mail-stat">
+          <strong>{{ mail_store_stats.mailboxes }}</strong>
+          <span>邮箱记录</span>
+        </div>
+        <div class="mail-stat">
+          <strong>{{ mail_store_stats.attachments }}</strong>
+          <span>附件记录</span>
+        </div>
+        <div class="mail-stat">
+          <strong>{{ mail_store_stats.smtp_sessions }}</strong>
+          <span>近期网络会话</span>
+        </div>
+      </div>
+    </div>
+    <form
+      class="danger-form"
+      method="post"
+      action="/admin/settings/clear-mail"
+      onsubmit="return confirm('确认清除所有已接收邮件、邮箱记录和近期网络会话？此操作不可恢复。')"
+    >
+      <label class="danger-confirm">
+        <input type="checkbox" name="confirm" value="clear-all-mail" required />
+        <span>我确认清除所有邮件数据和近期网络会话</span>
+      </label>
+      <button class="button button--danger" type="submit">清除所有邮件</button>
+    </form>
+  </div>
 </section>
 {% endblock %}

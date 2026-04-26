@@ -152,6 +152,8 @@ async def test_public_mailbox_page_exposes_pagination_links(app_client, runtime,
     assert first_page.status_code == 200
     assert "Newest" in first_page.text
     assert "?limit=1&offset=1" in first_page.text
+    assert "?limit=1&offset=2" in first_page.text
+    assert 'aria-label="第 3 页"' in first_page.text
     assert second_page.status_code == 200
     assert "Middle" in second_page.text
     assert "?limit=1&offset=0" in second_page.text

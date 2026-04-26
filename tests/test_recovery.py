@@ -8,6 +8,7 @@ import pytest
 
 from app.config import Settings
 from app.ingest.queue import ParseQueue, ParseTask
+from app.ingest.recovery import RecoveryScanner
 from app.runtime import RapidInboxRuntime
 from conftest import connect_database
 
@@ -144,6 +145,44 @@ async def test_recovery_scanner_rebuilds_missing_message_and_delivery(tmp_path, 
         assert mailbox["items"][0]["parse_status"] in {"pending", "parsed"}
     finally:
         await repaired.stop()
+
+
+@pytest.mark.asyncio
+async def test_startup_skips_full_manifest_scan_when_database_is_consistent(
+    tmp_path,
+    sample_email_bytes: bytes,
+    monkeypatch,
+) -> None:
+    settings = Settings(
+        storage_root=tmp_path / "storage",
+        database_path=tmp_path / "storage" / "app.db",
+    )
+    runtime = RapidInboxRuntime(settings)
+
+    await runtime.start()
+    try:
+        await runtime.create_domain("adb.com")
+        await runtime.accept_message(
+            rcpt_tos=["foo@adb.com"],
+            envelope_from="sender@example.com",
+            content=sample_email_bytes,
+        )
+        await runtime.drain_parser_queue()
+    finally:
+        await runtime.stop()
+
+    async def fail_full_recovery(self) -> None:
+        raise AssertionError("full manifest recovery should not run for a consistent database")
+
+    monkeypatch.setattr(RecoveryScanner, "_recover_manifests", fail_full_recovery)
+
+    restarted = RapidInboxRuntime(settings)
+    await restarted.start()
+    try:
+        mailbox = await restarted.get_mailbox_view("foo@adb.com")
+        assert mailbox["message_count"] == 1
+    finally:
+        await restarted.stop()
 
 
 @pytest.mark.asyncio

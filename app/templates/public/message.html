@@ -2,188 +2,292 @@
 
 {% block head %}
 <style>
-  .msg-header {
-    margin-bottom: 2.5rem;
-  }
-  
-  .msg-title {
-    font-size: clamp(1.8rem, 4vw, 2.5rem);
-    font-weight: 800;
-    margin-bottom: 1.5rem;
-    line-height: 1.3;
-    word-break: break-word;
-    color: var(--text-main);
-  }
-  
-  .meta-grid {
+  .message-page {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
+    gap: 18px;
   }
-  
-  .meta-item {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--card-border);
-    border-radius: 0.75rem;
-    padding: 1rem;
+
+  .message-toolbar {
     display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
-  
+
+  .message-header {
+    padding: 22px;
+  }
+
+  .message-title {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+    font-size: 2rem;
+    line-height: 1.18;
+    font-weight: 780;
+  }
+
+  .message-meta {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .meta-item {
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #f9fbfc;
+    padding: 12px;
+  }
+
   .meta-label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
     font-size: 0.8rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-weight: 720;
   }
-  
+
   .meta-value {
-    font-weight: 600;
-    color: var(--text-main);
-    word-break: break-all;
-  }
-  
-  .content-section {
-    margin-top: 3rem;
-  }
-  
-  .section-title {
-    font-size: 1.25rem;
+    display: block;
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 0.93rem;
     font-weight: 700;
-    margin-bottom: 1.5rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meta-value.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.86rem;
+  }
+
+  .notice {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    font-weight: 650;
+  }
+
+  .notice-warning {
+    border-color: #e6d29a;
+    background: #fff8e8;
+    color: var(--amber);
+  }
+
+  .notice-danger {
+    border-color: #e9bbb5;
+    background: #fff4f2;
+    color: var(--red);
+  }
+
+  .content-section {
+    padding: 18px;
+  }
+
+  .section-head {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    color: var(--primary);
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
   }
-  
+
+  .section-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--ink);
+    font-size: 1.05rem;
+    font-weight: 760;
+  }
+
   .text-content-box {
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--card-border);
-    border-radius: 1rem;
-    padding: 1.5rem;
-    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
-    font-size: 0.95rem;
-    line-height: 1.6;
-    color: #e2e8f0;
-    white-space: pre-wrap;
-    word-break: break-word;
     overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfcfd;
+    color: var(--ink);
+    padding: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
-  
+
   .iframe-container {
-    width: 100%;
-    border-radius: 1rem;
     overflow: hidden;
-    border: 1px solid var(--card-border);
-    background: #ffffff; /* HTML body is almost always designed for white bg */
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
   }
-  
+
   .iframe-container iframe {
-    width: 100%;
-    min-height: 600px;
-    border: none;
     display: block;
+    width: 100%;
+    min-height: 620px;
+    border: 0;
+    background: #fff;
   }
 
   .attachment-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
   }
-  
+
   .attachment-card {
-    display: flex;
-    flex-direction: column;
-    background: rgba(30, 41, 59, 0.5);
-    border: 1px solid var(--card-border);
-    border-radius: 1rem;
-    padding: 1.25rem;
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #f9fbfc;
+    padding: 14px;
+    color: inherit;
     text-decoration: none;
-    transition: all 0.2s;
   }
-  
+
   .attachment-card:hover {
-    background: rgba(30, 41, 59, 0.8);
-    border-color: var(--primary);
-    transform: translateY(-2px);
+    border-color: var(--line-strong);
+    background: #fff;
+    box-shadow: 0 10px 22px rgba(32, 38, 45, 0.08);
+  }
+
+  .attachment-name {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .attachment-name strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+    font-size: 0.96rem;
+  }
+
+  .attachment-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .headers-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
   }
 
   .headers-table {
     width: 100%;
     border-collapse: collapse;
-    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
-    font-size: 0.85rem;
+    background: #fbfcfd;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.84rem;
   }
-  
-  .headers-table th, .headers-table td {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  .headers-table th,
+  .headers-table td {
+    border-bottom: 1px solid var(--line);
+    padding: 10px 12px;
     text-align: left;
     vertical-align: top;
   }
-  
+
+  .headers-table tr:last-child th,
+  .headers-table tr:last-child td {
+    border-bottom: 0;
+  }
+
   .headers-table th {
-    color: var(--text-muted);
-    font-weight: 600;
-    width: 30%;
-    word-break: break-word;
+    width: 28%;
+    color: var(--muted-strong);
+    font-weight: 760;
+    overflow-wrap: anywhere;
   }
-  
+
   .headers-table td {
-    color: #cbd5e1;
-    word-break: break-all;
+    color: var(--ink);
+    overflow-wrap: anywhere;
   }
-  
-  .headers-table tr:hover td, .headers-table tr:hover th {
-    background: rgba(255, 255, 255, 0.02);
+
+  @media (max-width: 860px) {
+    .message-meta {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
-  
-  .notice {
-    padding: 1rem 1.5rem;
-    border-radius: 0.75rem;
-    margin-bottom: 2rem;
-    font-weight: 500;
-  }
-  
-  .notice-warning {
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    color: #fbbf24;
-  }
-  
-  .notice-danger {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #f87171;
+
+  @media (max-width: 620px) {
+    .message-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .message-toolbar .button-row,
+    .message-toolbar .btn {
+      width: 100%;
+    }
+
+    .message-title {
+      font-size: 1.55rem;
+    }
+
+    .message-meta {
+      grid-template-columns: 1fr;
+    }
+
+    .iframe-container iframe {
+      min-height: 460px;
+    }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div data-aos="fade-up" data-aos-duration="600">
-  <div class="msg-header">
-    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem;">
-      <a href="/mail/{{ mailbox }}" class="btn btn-ghost" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-        ← 返回邮箱
-      </a>
-      <a href="/mail/{{ mailbox }}/{{ delivery_id }}/raw" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-        下载原始邮件 (.eml)
+<div class="message-page">
+  <div class="message-toolbar">
+    <a href="/mail/{{ mailbox }}" class="btn btn-secondary">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M19 12H5"></path>
+        <path d="m12 19-7-7 7-7"></path>
+      </svg>
+      返回邮箱
+    </a>
+    <div class="button-row">
+      <a href="/mail/{{ mailbox }}/{{ delivery_id }}/raw" class="btn btn-primary">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <path d="M7 10l5 5 5-5"></path>
+          <path d="M12 15V3"></path>
+        </svg>
+        下载原始邮件
       </a>
     </div>
+  </div>
 
-    <h1 class="msg-title">{{ subject or "（无主题）" }}</h1>
-
-    <div class="meta-grid">
+  <section class="surface message-header">
+    <h1 class="message-title">{{ subject or "（无主题）" }}</h1>
+    <div class="message-meta">
       <div class="meta-item">
         <span class="meta-label">发件人</span>
         <span class="meta-value">{{ from_addr or "未知发件人" }}</span>
       </div>
       <div class="meta-item">
-        <span class="meta-label">收件人</span>
+        <span class="meta-label">收件箱</span>
         <span class="meta-value">{{ mailbox }}</span>
       </div>
       <div class="meta-item">
@@ -192,27 +296,42 @@
       </div>
       <div class="meta-item">
         <span class="meta-label">投递编号</span>
-        <span class="meta-value" style="font-family: monospace; font-size: 0.9rem;">{{ delivery_id }}</span>
+        <span class="meta-value mono">{{ delivery_id }}</span>
       </div>
     </div>
-  </div>
+  </section>
 
   {% if parse_status == "pending" %}
-    <div class="notice notice-warning" data-aos="fade-up">
+    <div class="notice notice-warning">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M12 8v4"></path>
+        <path d="M12 16h.01"></path>
+      </svg>
       这封邮件仍在解析中。稍后刷新页面即可看到正文、附件或网页预览。
     </div>
   {% elif parse_status == "failed" %}
-    <div class="notice notice-danger" data-aos="fade-up">
+    <div class="notice notice-danger">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="m15 9-6 6"></path>
+        <path d="m9 9 6 6"></path>
+      </svg>
       这封邮件在解析时发生错误，部分内容可能暂时不可用。
     </div>
   {% endif %}
 
   {% if html_body %}
-    <div class="content-section" data-aos="fade-up" data-aos-delay="100">
-      <h3 class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-        网页正文预览
-      </h3>
+    <section class="surface content-section">
+      <div class="section-head">
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+            <path d="M3 9h18"></path>
+          </svg>
+          网页正文
+        </h2>
+      </div>
       <div class="iframe-container">
         <iframe
           src="/mail/{{ mailbox }}/{{ delivery_id }}/html"
@@ -221,51 +340,67 @@
           referrerpolicy="no-referrer"
         ></iframe>
       </div>
-    </div>
+    </section>
   {% endif %}
 
   {% if text_body %}
-    <div class="content-section" data-aos="fade-up" data-aos-delay="150">
-      <h3 class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-        纯文本内容
-      </h3>
+    <section class="surface content-section">
+      <div class="section-head">
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path>
+            <path d="M14 2v6h6"></path>
+            <path d="M16 13H8"></path>
+            <path d="M16 17H8"></path>
+          </svg>
+          纯文本
+        </h2>
+      </div>
       <div class="text-content-box">{{ text_body }}</div>
-    </div>
+    </section>
   {% endif %}
 
   {% if attachments %}
-    <div class="content-section" data-aos="fade-up" data-aos-delay="200">
-      <h3 class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-        附件 ({{ attachments | length }})
-      </h3>
+    <section class="surface content-section">
+      <div class="section-head">
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+          </svg>
+          附件
+        </h2>
+        <span class="badge">{{ attachments | length }} 个</span>
+      </div>
       <div class="attachment-grid">
         {% for attachment in attachments %}
-          <a class="attachment-card" href="/mail/{{ mailbox }}/{{ delivery_id }}/attachments/{{ attachment.id }}" target="_blank">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; align-items: flex-start;">
-              <strong style="color: var(--text-main); font-size: 1.05rem; word-break: break-all; padding-right: 1rem;">
-                {{ attachment.filename or attachment.safe_filename }}
-              </strong>
-              <span class="badge badge-success" style="font-size: 0.7rem; white-space: nowrap;">{{ attachment.size_bytes }} B</span>
+          <a class="attachment-card" href="/mail/{{ mailbox }}/{{ delivery_id }}/attachments/{{ attachment.id }}" target="_blank" rel="noreferrer">
+            <div class="attachment-name">
+              <strong>{{ attachment.filename or attachment.safe_filename }}</strong>
+              <span class="badge badge-success">{{ attachment.size_bytes }} B</span>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-top: auto; padding-top: 1rem;">
-              <span class="text-muted" style="font-size: 0.8rem;">{{ attachment.content_type or "未知类型" }}</span>
-              <span class="text-muted" style="font-size: 0.8rem;">{{ "内联资源" if attachment.is_inline else "普通附件" }}</span>
+            <div class="attachment-meta">
+              <span>{{ attachment.content_type or "未知类型" }}</span>
+              <span>{{ "内联资源" if attachment.is_inline else "普通附件" }}</span>
             </div>
           </a>
         {% endfor %}
       </div>
-    </div>
+    </section>
   {% endif %}
 
   {% if headers %}
-    <div class="content-section" data-aos="fade-up" data-aos-delay="300">
-      <h3 class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-        原始邮件头 (Headers)
-      </h3>
-      <div class="glass-card" style="padding: 1rem; overflow-x: auto;">
+    <section class="surface content-section">
+      <div class="section-head">
+        <h2 class="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 6h16"></path>
+            <path d="M4 12h16"></path>
+            <path d="M4 18h16"></path>
+          </svg>
+          原始邮件头
+        </h2>
+      </div>
+      <div class="headers-wrap">
         <table class="headers-table">
           <tbody>
             {% for name, value in headers %}
@@ -277,7 +412,7 @@
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   {% endif %}
 </div>
 {% endblock %}

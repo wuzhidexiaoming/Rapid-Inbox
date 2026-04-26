@@ -4,6 +4,7 @@ import json
 import hashlib
 import os
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -84,6 +85,18 @@ class FileStorage:
         # Hidden temp files are the current write-ahead artifact naming scheme.
         for part_file in self.storage_root.rglob(".*.part"):
             part_file.unlink(missing_ok=True)
+
+    def clear_mail_data(self) -> None:
+        for directory in (
+            self._settings.raw_dir,
+            self._settings.text_dir,
+            self._settings.html_dir,
+            self._settings.attachments_dir,
+            self._settings.manifests_dir,
+            self._settings.tmp_dir,
+        ):
+            shutil.rmtree(directory, ignore_errors=True)
+            directory.mkdir(parents=True, exist_ok=True)
 
     def _dated_path(self, category: str, message_id: str, suffix: str, received_at: str) -> str:
         year, month, day = path_date_parts(received_at)

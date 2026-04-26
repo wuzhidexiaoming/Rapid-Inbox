@@ -1,0 +1,23 @@
+{% macro pagination_nav(pagination) -%}
+  {% if pagination.total_pages > 1 %}
+    <div class="pagination-nav" aria-label="分页">
+      {% if pagination.has_previous %}
+        <a class="button button--ghost page-step" href="{{ pagination.previous_page_url | safe }}">上一页</a>
+      {% endif %}
+      <div class="page-number-list" aria-label="页码">
+        {% for page_item in pagination.page_items %}
+          {% if page_item.type == "ellipsis" %}
+            <span class="page-ellipsis" aria-hidden="true">&hellip;</span>
+          {% elif page_item.is_current %}
+            <span class="page-link is-current" aria-current="page">{{ page_item.page }}</span>
+          {% else %}
+            <a class="page-link" href="{{ page_item.url | safe }}" aria-label="第 {{ page_item.page }} 页">{{ page_item.page }}</a>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% if pagination.has_next %}
+        <a class="button button--ghost page-step" href="{{ pagination.next_page_url | safe }}">下一页</a>
+      {% endif %}
+    </div>
+  {% endif %}
+{%- endmacro %}

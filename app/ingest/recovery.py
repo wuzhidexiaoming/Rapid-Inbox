@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from app.db.connection import connect_database
 from app.ingest.queue import ParseTask
 
 if TYPE_CHECKING:
@@ -14,7 +15,12 @@ class RecoveryScanner:
         self.runtime = runtime
 
     async def run(self) -> None:
-        self.runtime.storage.cleanup_stale_parts()
+        if self._database_needs_manifest_recovery():
+            await self._recover_manifests()
+
+        await self._requeue_unparsed_messages()
+
+    async def _recover_manifests(self) -> None:
         policy_manifests: list[dict[str, object]] = []
         legacy_manifests: list[dict[str, object]] = []
         latest_policy_snapshots: dict[int, dict[str, object]] = {}
@@ -44,8 +50,38 @@ class RecoveryScanner:
                 # Legacy manifests can remain unrecoverable if the matching domain never reappears.
                 continue
 
+    async def _requeue_unparsed_messages(self) -> None:
         for message_id in await self.runtime.find_messages_for_reparse():
             await self.runtime.parse_queue.enqueue(ParseTask(message_id=message_id))
+
+    def _database_needs_manifest_recovery(self) -> bool:
+        with connect_database(self.runtime.settings.database_path) as connection:
+            messages_count = int(
+                connection.execute("SELECT COUNT(*) AS count FROM messages").fetchone()["count"]
+            )
+            if messages_count == 0:
+                return True
+
+            domains_count = int(
+                connection.execute("SELECT COUNT(*) AS count FROM domains").fetchone()["count"]
+            )
+            if domains_count == 0:
+                return True
+
+            messages_without_deliveries = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) AS count
+                    FROM messages AS m
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM message_deliveries AS d
+                        WHERE d.message_id = m.id
+                    )
+                    """
+                ).fetchone()["count"]
+            )
+        return messages_without_deliveries > 0
 
     def _has_domain_policy(self, manifest: dict[str, object]) -> bool:
         recipients = manifest.get("recipients")

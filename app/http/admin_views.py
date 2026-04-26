@@ -916,8 +916,25 @@ async def audit_page(
     )
 
 
+def _mail_store_stats(request: Request) -> dict[str, int]:
+    with connect_database(request.app.state.runtime.settings.database_path) as connection:
+        return {
+            "messages": _count(connection, "SELECT COUNT(*) AS count FROM messages"),
+            "deliveries": _count(connection, "SELECT COUNT(*) AS count FROM message_deliveries"),
+            "mailboxes": _count(connection, "SELECT COUNT(*) AS count FROM mailboxes"),
+            "attachments": _count(connection, "SELECT COUNT(*) AS count FROM attachments"),
+            "smtp_sessions": _count(connection, "SELECT COUNT(*) AS count FROM smtp_sessions"),
+        }
+
+
 @router.get("/admin/settings", response_class=HTMLResponse)
-async def settings_page(request: Request) -> Response:
+async def settings_page(
+    request: Request,
+    mail_cleared: int = Query(default=0, ge=0, le=1),
+    cleared_messages: int = Query(default=0, ge=0),
+    cleared_mailboxes: int = Query(default=0, ge=0),
+    cleared_sessions: int = Query(default=0, ge=0),
+) -> Response:
     admin_or_response = await _require_admin(request)
     if isinstance(admin_or_response, Response):
         return admin_or_response
@@ -954,5 +971,44 @@ async def settings_page(request: Request) -> Response:
             "page_title": "系统设置",
             "admin": admin_or_response,
             "settings_items": settings_items,
+            "mail_store_stats": _mail_store_stats(request),
+            "mail_clear_result": {
+                "messages": cleared_messages,
+                "mailboxes": cleared_mailboxes,
+                "smtp_sessions": cleared_sessions,
+            } if mail_cleared else None,
         },
+    )
+
+
+@router.post("/admin/settings/clear-mail")
+async def clear_mail_store(request: Request) -> Response:
+    admin_or_response = await _require_admin(request)
+    if isinstance(admin_or_response, Response):
+        return admin_or_response
+
+    form = _parse_form_body(await request.body())
+    if form.get("confirm") != "clear-all-mail":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="confirmation required")
+
+    result = await request.app.state.runtime.clear_all_mail()
+    await request.app.state.runtime.audit.log(
+        "admin",
+        str(admin_or_response.get("username") or admin_or_response.get("id") or "admin"),
+        "mail.clear_all",
+        "mail_store",
+        None,
+        "success",
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=result,
+    )
+    return RedirectResponse(
+        (
+            "/admin/settings"
+            f"?mail_cleared=1&cleared_messages={result['messages']}"
+            f"&cleared_mailboxes={result['mailboxes']}"
+            f"&cleared_sessions={result['smtp_sessions']}"
+        ),
+        status_code=status.HTTP_303_SEE_OTHER,
     )

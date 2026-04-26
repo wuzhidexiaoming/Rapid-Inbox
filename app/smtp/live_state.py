@@ -34,6 +34,12 @@ class LiveState:
         with self._lock:
             return [dict(event) for event in self._events if int(event.get("seq", 0)) > seq]
 
+    def clear(self) -> None:
+        with self._lock:
+            self._events.clear()
+            self._generation = uuid4().hex
+            self._next_seq = 1
+
     @property
     def generation(self) -> str:
         return self._generation
