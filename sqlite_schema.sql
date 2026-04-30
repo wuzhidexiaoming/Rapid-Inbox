@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked', 'expired', 'disabled')),
     allow_header INTEGER NOT NULL DEFAULT 1 CHECK (allow_header IN (0, 1)),
     allow_query INTEGER NOT NULL DEFAULT 0 CHECK (allow_query IN (0, 1)),
-    rate_limit_per_min INTEGER NOT NULL DEFAULT 60,
+    rate_limit_per_min INTEGER NOT NULL DEFAULT 3600,
     allowed_ip_cidrs TEXT,
     expires_at TEXT,
     last_used_at TEXT,

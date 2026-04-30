@@ -92,7 +92,7 @@ class ApiKeyService:
         status: str = "active",
         allow_header: bool = True,
         allow_query: bool = False,
-        rate_limit_per_min: int = 60,
+        rate_limit_per_min: int = 3600,
         allowed_ip_cidrs: Sequence[str] | None = None,
         expires_at: str | None = None,
     ) -> dict[str, Any]:

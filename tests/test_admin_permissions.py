@@ -8,7 +8,7 @@ from app.db.connection import connect_database
 
 
 @pytest.mark.asyncio
-async def test_public_key_requires_scope_and_domain_grant(app_client, runtime) -> None:
+async def test_public_key_without_domain_grants_can_read_current_domains(app_client, runtime) -> None:
     await runtime.create_domain("adb.com")
     key = await runtime.api_keys.create_key(
         name="public-read",
@@ -23,7 +23,26 @@ async def test_public_key_requires_scope_and_domain_grant(app_client, runtime) -
         headers={"X-API-Key": key["plain_text"]},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_public_key_without_domain_grants_can_read_later_domains(app_client, runtime) -> None:
+    key = await runtime.api_keys.create_key(
+        name="public-read-all-future",
+        kind="public",
+        scopes=["public.read"],
+        domain_ids=[],
+        mailbox_patterns=[],
+    )
+    await runtime.create_domain("later.adb.com")
+
+    response = await app_client.get(
+        "/api/v1/public/mailboxes/foo@later.adb.com/messages",
+        headers={"X-API-Key": key["plain_text"]},
+    )
+
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio

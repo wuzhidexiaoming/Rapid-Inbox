@@ -408,13 +408,13 @@ async def test_admin_api_keys_page_uses_checkbox_scopes_and_domain_hints(app_cli
     assert 'type="checkbox" name="scopes" value="public.read"' in response.text
     assert 'type="text" name="scopes"' not in response.text
     assert "选择授权域名" in response.text
-    assert "不勾选任何已接入域名时，此密钥默认没有域名访问权限。" in response.text
+    assert "不勾选任何已接入域名时，此密钥可访问所有当前和后续新增的域名。" in response.text
     assert "公开邮件读取" in response.text
     assert "adb.com" in response.text
 
 
 @pytest.mark.asyncio
-async def test_admin_api_keys_form_without_domain_grants_has_no_public_mailbox_access(app_client, runtime) -> None:
+async def test_admin_api_keys_form_without_domain_grants_allows_public_mailbox_access(app_client, runtime) -> None:
     await runtime.create_domain("adb.com")
     await app_client.post(
         "/admin/login",
@@ -440,7 +440,7 @@ async def test_admin_api_keys_form_without_domain_grants_has_no_public_mailbox_a
         headers={"X-API-Key": match.group(1)},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio

@@ -260,7 +260,7 @@
 
       <div class="form-section">
         <span style="display: block; color: var(--muted); font-size: 0.9rem;">授权域名</span>
-        <p class="muted" style="margin: 0.35rem 0 0;">不勾选任何已接入域名时，此密钥默认没有域名访问权限。</p>
+        <p class="muted" style="margin: 0.35rem 0 0;">不勾选任何已接入域名时，此密钥可访问所有当前和后续新增的域名。</p>
         {% if available_domains %}
           <details class="domain-dropdown" {% if create_form.domain_ids %}open{% endif %}>
             <summary>
@@ -270,7 +270,7 @@
                   {% if create_form.domain_ids %}
                     已选择 {{ create_form.domain_ids | length }} 个域名
                   {% else %}
-                    当前未选择任何域名
+                    全部域名（含后续新增）
                   {% endif %}
                 </span>
               </span>
@@ -298,7 +298,7 @@
           </details>
         {% else %}
           <div class="empty-state" style="margin-top: 0.75rem;">
-            <p>当前还没有已接入域名。若同时不填写邮箱规则，此密钥默认没有任何资源访问权限。</p>
+            <p>当前还没有已接入域名。不选择域名时，后续新增域名也会自动可用。</p>
           </div>
         {% endif %}
       </div>
@@ -308,7 +308,7 @@
           <span style="color: var(--muted); font-size: 0.9rem;">邮箱匹配规则</span>
           <input type="text" name="mailbox_patterns" value="{{ create_form.mailbox_patterns }}" placeholder="可选：逗号分隔的规则，如 *@adb.com" />
         </label>
-        <p class="muted" style="margin: 0.5rem 0 0; font-size: 0.85rem;">如果域名授权和邮箱规则都留空，此密钥不会默认拥有全部域名权限，而是默认没有资源访问权限。</p>
+        <p class="muted" style="margin: 0.5rem 0 0; font-size: 0.85rem;">邮箱规则留空表示不按邮箱限制；域名未勾选时表示全部域名。</p>
       </div>
 
       <div class="button-row" style="justify-content: flex-end;">
@@ -368,13 +368,13 @@
                   <div class="stack-meta" style="font-size: 0.85rem;">
                     {% if api_key.domain_count > 0 %}
                       <span style="color: var(--text);">{{ api_key.domain_count }} 个域名</span>
+                    {% else %}
+                      <span style="color: var(--text);">全部域名（含后续新增）</span>
                     {% endif %}
                     {% if api_key.mailbox_count > 0 %}
                       <span style="color: var(--text);">{{ api_key.mailbox_count }} 条邮箱规则</span>
-                    {% endif %}
-                    {% if api_key.domain_count == 0 and api_key.mailbox_count == 0 %}
-                      <span class="muted">未授权任何域名 / 邮箱规则</span>
-                      <span class="muted">默认不可访问公开邮箱</span>
+                    {% else %}
+                      <span class="muted">未限制邮箱规则</span>
                     {% endif %}
                   </div>
                 </td>
@@ -420,7 +420,7 @@
         const selectedCount = domainInputs.filter((input) => input.checked).length;
         summary.textContent = selectedCount > 0
           ? `已选择 ${selectedCount} 个域名`
-          : '当前未选择任何域名';
+          : '全部域名（含后续新增）';
       };
 
       for (const input of domainInputs) {
