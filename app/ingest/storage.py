@@ -37,6 +37,9 @@ class FileStorage:
     def raw_message_path(self, message_id: str, received_at: str) -> str:
         return self._dated_path("raw", message_id, ".eml", received_at)
 
+    def manifest_path(self, message_id: str, received_at: str) -> str:
+        return self._dated_path("manifests", message_id, ".json", received_at)
+
     def write_raw_message(self, message_id: str, received_at: str, content: bytes) -> tuple[str, str, int]:
         relative_path = self.raw_message_path(message_id, received_at)
         self._write_bytes(relative_path, content)
@@ -60,7 +63,7 @@ class FileStorage:
         return relative_path, safe_name
 
     def write_manifest(self, message_id: str, received_at: str, payload: dict[str, object]) -> str:
-        relative_path = self._dated_path("manifests", message_id, ".json", received_at)
+        relative_path = self.manifest_path(message_id, received_at)
         content = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
         self._write_bytes(relative_path, content)
         return relative_path

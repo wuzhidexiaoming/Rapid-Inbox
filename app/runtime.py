@@ -5,6 +5,7 @@ import asyncio
 import json
 import sqlite3
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from time import time_ns
 
@@ -27,6 +28,10 @@ from app.smtp.live_state import LiveState
 from app.smtp.matcher import DomainMatcher, DomainRule
 
 
+MESSAGE_RETENTION_SECONDS = 20 * 60
+MESSAGE_RETENTION_CLEANUP_INTERVAL_SECONDS = 30
+
+
 class RapidInboxRuntime:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -43,6 +48,7 @@ class RapidInboxRuntime:
         self.parser = MessageParser(self.storage)
         self.parse_queue = ParseQueue(self._parse_message)
         self._mail_store_lock = asyncio.Lock()
+        self._retention_cleanup_task: asyncio.Task[None] | None = None
         self.live_state = LiveState()
         self.recovery = RecoveryScanner(self)
 
@@ -56,8 +62,10 @@ class RapidInboxRuntime:
         await self.parse_queue.start()
         await self.recovery.run()
         self.domains.reload()
+        self._retention_cleanup_task = asyncio.create_task(self._message_retention_loop())
 
     async def stop(self) -> None:
+        await self._stop_message_retention_loop()
         await self.parse_queue.stop()
 
     async def create_domain(self, root_domain: str, **kwargs: Any) -> dict[str, Any]:
@@ -92,6 +100,242 @@ class RapidInboxRuntime:
                 return result
             finally:
                 await self.parse_queue.start()
+
+    async def cleanup_expired_messages(self) -> dict[str, int]:
+        cutoff = self._message_retention_cutoff()
+        expired_message_ids = self._expired_message_ids(cutoff)
+        if not expired_message_ids:
+            return self._empty_retention_result()
+
+        async with self._mail_store_lock:
+            expired_message_ids = self._expired_message_ids(cutoff)
+            if not expired_message_ids:
+                return self._empty_retention_result()
+
+            expired_message_id_set = set(expired_message_ids)
+            dropped_parse_tasks = self.parse_queue.remove_pending(
+                lambda task: task.message_id in expired_message_id_set
+            )
+            queue_was_running = self.parse_queue.is_running
+            if queue_was_running:
+                await self.parse_queue.stop()
+
+            try:
+                result = await self.writer.execute(
+                    lambda connection: self._delete_messages_received_at_or_before(connection, cutoff)
+                )
+                storage_paths = result.pop("storage_paths")
+                deleted_files = self._delete_storage_files(storage_paths)
+                return {
+                    "messages": int(result["messages"]),
+                    "deliveries": int(result["deliveries"]),
+                    "mailboxes": int(result["mailboxes"]),
+                    "attachments": int(result["attachments"]),
+                    "raw_size_bytes": int(result["raw_size_bytes"]),
+                    "files": deleted_files,
+                    "dropped_parse_tasks": dropped_parse_tasks,
+                }
+            finally:
+                if queue_was_running:
+                    await self.parse_queue.start()
+
+    async def _message_retention_loop(self) -> None:
+        while True:
+            await asyncio.sleep(MESSAGE_RETENTION_CLEANUP_INTERVAL_SECONDS)
+            try:
+                await self.cleanup_expired_messages()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                continue
+
+    async def _stop_message_retention_loop(self) -> None:
+        task = self._retention_cleanup_task
+        if task is None:
+            return
+        self._retention_cleanup_task = None
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    def _message_retention_cutoff(self) -> str:
+        now = datetime.fromisoformat(utc_now().replace("Z", "+00:00"))
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        cutoff = now.astimezone(timezone.utc) - timedelta(seconds=MESSAGE_RETENTION_SECONDS)
+        return cutoff.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+    def _expired_message_ids(self, cutoff: str) -> list[str]:
+        with connect_database(self.settings.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id
+                FROM messages
+                WHERE received_at <= ?
+                ORDER BY received_at ASC, id ASC
+                """,
+                (cutoff,),
+            ).fetchall()
+        return [str(row["id"]) for row in rows]
+
+    def _empty_retention_result(self) -> dict[str, int]:
+        return {
+            "messages": 0,
+            "deliveries": 0,
+            "mailboxes": 0,
+            "attachments": 0,
+            "raw_size_bytes": 0,
+            "files": 0,
+            "dropped_parse_tasks": 0,
+        }
+
+    def _delete_messages_received_at_or_before(
+        self,
+        connection: sqlite3.Connection,
+        cutoff: str,
+    ) -> dict[str, Any]:
+        message_rows = connection.execute(
+            """
+            SELECT
+                id,
+                raw_path,
+                raw_size_bytes,
+                received_at,
+                text_body_path,
+                html_body_path
+            FROM messages
+            WHERE received_at <= ?
+            ORDER BY received_at ASC, id ASC
+            """,
+            (cutoff,),
+        ).fetchall()
+        if not message_rows:
+            return {**self._empty_retention_result(), "storage_paths": []}
+
+        delivery_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM message_deliveries AS d
+                JOIN messages AS m ON m.id = d.message_id
+                WHERE m.received_at <= ?
+                """,
+                (cutoff,),
+            ).fetchone()["count"]
+        )
+        mailbox_ids = [
+            int(row["mailbox_id"])
+            for row in connection.execute(
+                """
+                SELECT DISTINCT d.mailbox_id
+                FROM message_deliveries AS d
+                JOIN messages AS m ON m.id = d.message_id
+                WHERE m.received_at <= ?
+                ORDER BY d.mailbox_id ASC
+                """,
+                (cutoff,),
+            ).fetchall()
+        ]
+        attachment_rows = connection.execute(
+            """
+            SELECT a.storage_path
+            FROM attachments AS a
+            JOIN messages AS m ON m.id = a.message_id
+            WHERE m.received_at <= ?
+            ORDER BY a.message_id ASC, a.part_index ASC
+            """,
+            (cutoff,),
+        ).fetchall()
+
+        storage_paths: list[str] = []
+        total_bytes = 0
+        for row in message_rows:
+            message_id = str(row["id"])
+            received_at = str(row["received_at"])
+            total_bytes += int(row["raw_size_bytes"])
+            for path_value in (
+                row["raw_path"],
+                row["text_body_path"],
+                row["html_body_path"],
+                self.storage.manifest_path(message_id, received_at),
+            ):
+                if path_value:
+                    storage_paths.append(str(path_value))
+        storage_paths.extend(str(row["storage_path"]) for row in attachment_rows)
+
+        connection.execute("DELETE FROM messages WHERE received_at <= ?", (cutoff,))
+        for mailbox_id in mailbox_ids:
+            self._refresh_mailbox_summary_after_message_delete(connection, mailbox_id)
+
+        return {
+            "messages": len(message_rows),
+            "deliveries": delivery_count,
+            "mailboxes": len(mailbox_ids),
+            "attachments": len(attachment_rows),
+            "raw_size_bytes": total_bytes,
+            "storage_paths": storage_paths,
+        }
+
+    def _refresh_mailbox_summary_after_message_delete(self, connection: sqlite3.Connection, mailbox_id: int) -> None:
+        summary = connection.execute(
+            """
+            SELECT
+                COUNT(*) AS message_count,
+                MIN(delivered_at) AS first_seen_at,
+                MAX(delivered_at) AS latest_message_at
+            FROM message_deliveries
+            WHERE mailbox_id = ? AND status = 'active'
+            """,
+            (mailbox_id,),
+        ).fetchone()
+        message_count = int(summary["message_count"])
+        if message_count == 0:
+            connection.execute(
+                """
+                UPDATE mailboxes
+                SET latest_message_at = NULL,
+                    message_count = 0
+                WHERE id = ?
+                """,
+                (mailbox_id,),
+            )
+            return
+
+        connection.execute(
+            """
+            UPDATE mailboxes
+            SET first_seen_at = ?,
+                last_seen_at = ?,
+                latest_message_at = ?,
+                message_count = ?
+            WHERE id = ?
+            """,
+            (
+                summary["first_seen_at"],
+                summary["latest_message_at"],
+                summary["latest_message_at"],
+                message_count,
+                mailbox_id,
+            ),
+        )
+
+    def _delete_storage_files(self, storage_paths: list[str]) -> int:
+        deleted = 0
+        seen: set[str] = set()
+        for storage_path in storage_paths:
+            if storage_path in seen:
+                continue
+            seen.add(storage_path)
+            try:
+                path = self.storage.resolve(storage_path)
+                if path.is_file():
+                    path.unlink()
+                    deleted += 1
+            except Exception:
+                continue
+        return deleted
 
     def list_audit_logs(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
         return self.audit.list_logs(limit=limit, offset=offset)
