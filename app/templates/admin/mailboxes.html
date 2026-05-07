@@ -3,24 +3,31 @@
 
 {% block head %}
 <style>
-  .mailbox-tile {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
-    gap: 14px;
-    padding: 18px 20px;
-    background: var(--bg-elevated);
+  .mailbox-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    background: var(--bg-elevated);
+    overflow: hidden;
   }
-  .mailbox-tile:hover {
-    border-color: var(--border-strong);
-    box-shadow: var(--shadow-sm);
+  .mailbox-row {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-faint);
+    transition: background 0.15s ease;
   }
-  .mailbox-tile__avatar {
+  .mailbox-row:last-child { border-bottom: 0; }
+  .mailbox-row:hover { background: var(--accent-faint); }
+
+  .mailbox-row__avatar {
     display: inline-flex;
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     align-items: center;
     justify-content: center;
     border-radius: 999px;
@@ -28,61 +35,100 @@
     color: var(--accent-strong);
     font-family: var(--font-serif);
     font-weight: 600;
-    font-size: 1.05rem;
+    font-size: 0.92rem;
+    flex-shrink: 0;
   }
-  .mailbox-tile__head a {
+
+  .mailbox-row__primary { min-width: 0; display: grid; gap: 2px; }
+  .mailbox-row__address {
     color: var(--text);
-    font-family: var(--font-serif);
-    font-size: 1.02rem;
     font-weight: 600;
+    font-size: 0.96rem;
     text-decoration: none;
-    word-break: break-all;
-  }
-  .mailbox-tile__head a:hover { color: var(--accent-strong); }
-  .mailbox-tile__notes {
-    margin: 4px 0 0;
-    color: var(--text-muted);
-    font-size: 0.84rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .mailbox-tile__stats {
+  .mailbox-row__address:hover { color: var(--accent-strong); }
+  .mailbox-row__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 14px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px dashed var(--border);
+    gap: 8px 14px;
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: 0.82rem;
   }
-  .mailbox-tile__stats strong { color: var(--text); font-weight: 600; }
-  .mailbox-tile__pills {
+  .mailbox-row__meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .mailbox-row__notes {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mailbox-row__toggles {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
+    gap: 14px;
+    flex-shrink: 0;
   }
-  .mailbox-tile__form {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px dashed var(--border);
-    flex-wrap: wrap;
-  }
-  .mailbox-tile__toggle {
+  .toggle-mini {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    color: var(--text-secondary);
-    font-size: 0.84rem;
+    gap: 8px;
+    margin: 0;
     cursor: pointer;
   }
-  .mailbox-tile__toggle:hover { color: var(--text); }
-  .mailbox-tile__form button { margin-left: auto; }
+  .toggle-mini__label {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+    user-select: none;
+  }
+  .toggle-mini input { display: none; }
+  .toggle-switch-mini {
+    position: relative;
+    display: inline-block;
+    width: 32px;
+    height: 18px;
+    flex-shrink: 0;
+    background: var(--border-strong);
+    border-radius: 999px;
+    transition: background 0.18s ease;
+  }
+  .toggle-switch-mini::before {
+    content: '';
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    top: 2px;
+    background: #fff;
+    border-radius: 999px;
+    transition: transform 0.18s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  }
+  .toggle-mini input:checked + .toggle-switch-mini { background: var(--accent); }
+  .toggle-mini input:checked + .toggle-switch-mini::before { transform: translateX(14px); }
+  .toggle-mini.is-pending .toggle-switch-mini { opacity: 0.55; }
+
+  .mailbox-row__actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 920px) {
+    .mailbox-row {
+      grid-template-columns: 38px minmax(0, 1fr);
+      grid-auto-flow: row;
+    }
+    .mailbox-row__toggles,
+    .mailbox-row__actions {
+      grid-column: 2;
+      justify-content: flex-start;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -127,48 +173,58 @@
 </form>
 
 {% if mailboxes %}
-  <div class="tile-grid">
+  <ul class="mailbox-list">
     {% for mailbox in mailboxes %}
-      <article class="mailbox-tile">
-        <span class="mailbox-tile__avatar">{{ mailbox.address_canonical[0] | upper }}</span>
-        <div style="min-width: 0;">
-          <header class="mailbox-tile__head">
-            <a href="/admin/mailboxes/{{ mailbox.id }}">{{ mailbox.address_canonical }}</a>
-            {% if mailbox.notes %}<p class="mailbox-tile__notes">{{ mailbox.notes }}</p>{% endif %}
-          </header>
-          <div class="mailbox-tile__stats">
-            <span><i data-lucide="mail" style="width: 13px; height: 13px;"></i><strong>{{ mailbox.message_count }}</strong> 封</span>
-            <span><i data-lucide="clock-3" style="width: 13px; height: 13px;"></i>{{ cn_datetime(mailbox.latest_message_at, default="无") }}</span>
+      <li class="mailbox-row">
+        <span class="mailbox-row__avatar">{{ mailbox.address_canonical[0] | upper }}</span>
+        <div class="mailbox-row__primary">
+          <a class="mailbox-row__address" href="/admin/mailboxes/{{ mailbox.id }}">{{ mailbox.address_canonical }}</a>
+          <div class="mailbox-row__meta">
+            <span><i data-lucide="mail" style="width: 12px; height: 12px;"></i><strong style="color: var(--text);">{{ mailbox.message_count }}</strong> 封</span>
+            <span><i data-lucide="clock-3" style="width: 12px; height: 12px;"></i>{{ cn_datetime(mailbox.latest_message_at, default="无") }}</span>
+            {% if mailbox.notes %}<span class="mailbox-row__notes" title="{{ mailbox.notes }}"><i data-lucide="bookmark" style="width: 12px; height: 12px;"></i>{{ mailbox.notes }}</span>{% endif %}
           </div>
-          <div class="mailbox-tile__pills">
-            <span class="pill {% if mailbox.public_enabled %}pill--success{% else %}pill--neutral{% endif %}">
-              {{ cn_bool(mailbox.public_enabled, yes="已开启公开", no="关闭公开") }}
-            </span>
-            {% if mailbox.is_hidden %}
-              <span class="pill pill--warning">前台隐藏</span>
-            {% endif %}
-          </div>
-          <form method="post" action="/admin/mailboxes/{{ mailbox.id }}" class="mailbox-tile__form">
+        </div>
+
+        <div class="mailbox-row__toggles">
+          <form
+            method="post"
+            action="/admin/mailboxes/{{ mailbox.id }}"
+            class="toggle-mini"
+            data-auto-submit
+            title="开启后此邮箱可在公开页面被访问"
+          >
             <input type="hidden" name="limit" value="{{ pagination.limit }}" />
             <input type="hidden" name="offset" value="{{ pagination.offset }}" />
-            <label class="mailbox-tile__toggle">
-              <input type="hidden" name="public_enabled" value="0" />
-              <input type="checkbox" name="public_enabled" value="1" {% if mailbox.public_enabled %}checked{% endif %} />
-              公开
-            </label>
-            <label class="mailbox-tile__toggle">
-              <input type="hidden" name="is_hidden" value="0" />
-              <input type="checkbox" name="is_hidden" value="1" {% if mailbox.is_hidden %}checked{% endif %} />
-              隐藏
-            </label>
-            <button class="button button--subtle button--sm" type="submit">
-              <i data-lucide="save"></i>保存
-            </button>
+            <input type="hidden" name="public_enabled" value="0" />
+            <input type="checkbox" name="public_enabled" value="1" {% if mailbox.public_enabled %}checked{% endif %} />
+            <span class="toggle-switch-mini" aria-hidden="true"></span>
+            <span class="toggle-mini__label">公开</span>
+          </form>
+          <form
+            method="post"
+            action="/admin/mailboxes/{{ mailbox.id }}"
+            class="toggle-mini"
+            data-auto-submit
+            title="开启后此邮箱将从公开列表中隐藏"
+          >
+            <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+            <input type="hidden" name="offset" value="{{ pagination.offset }}" />
+            <input type="hidden" name="is_hidden" value="0" />
+            <input type="checkbox" name="is_hidden" value="1" {% if mailbox.is_hidden %}checked{% endif %} />
+            <span class="toggle-switch-mini" aria-hidden="true"></span>
+            <span class="toggle-mini__label">隐藏</span>
           </form>
         </div>
-      </article>
+
+        <div class="mailbox-row__actions">
+          <a class="button button--subtle button--sm" href="/admin/mailboxes/{{ mailbox.id }}">
+            详情<i data-lucide="arrow-right"></i>
+          </a>
+        </div>
+      </li>
     {% endfor %}
-  </div>
+  </ul>
 
   <div class="pagination-panel">
     <span class="pagination-summary">
@@ -183,4 +239,18 @@
     <p>当 SMTP 收到第一封邮件时，对应邮箱会自动出现在这里。</p>
   </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Auto-submit inline toggles on change so the user never has to click "save".
+  document.querySelectorAll('form[data-auto-submit]').forEach((form) => {
+    const checkbox = form.querySelector('input[type="checkbox"]');
+    if (!checkbox) return;
+    checkbox.addEventListener('change', () => {
+      form.classList.add('is-pending');
+      form.submit();
+    });
+  });
+</script>
 {% endblock %}

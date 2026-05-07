@@ -3,36 +3,134 @@
 
 {% block head %}
 <style>
-  .audit-filter-form {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
-    padding: 16px 18px;
-    background: var(--bg-elevated);
+  .audit-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+    background: var(--bg-elevated);
+    overflow: hidden;
   }
-  .audit-filter-form .row { grid-column: 1 / -1; justify-content: flex-end; }
-  .audit-filter-form label { gap: 4px; }
-  .audit-filter-form label > span:first-child { font-size: 0.78rem; }
+  .audit-entry {
+    border-bottom: 1px solid var(--border-faint);
+    transition: background 0.15s ease;
+  }
+  .audit-entry:last-child { border-bottom: 0; }
+  .audit-entry:hover { background: var(--accent-faint); }
+  .audit-entry[open] { background: var(--bg-subtle); }
 
-  .timeline-item__action {
+  .audit-summary {
+    display: grid;
+    grid-template-columns: 86px 220px minmax(0, 1fr) auto auto 16px;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 18px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+  .audit-summary::-webkit-details-marker { display: none; }
+
+  .audit-time {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .audit-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     color: var(--accent-strong);
     font-family: var(--font-mono);
-    font-size: 0.86rem;
+    font-size: 0.84rem;
     font-weight: 600;
-    margin-right: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .timeline-item__resource {
+  .audit-action__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+  .audit-resource {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     color: var(--text-secondary);
-    font-size: 0.92rem;
+    font-size: 0.86rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
   }
-  .timeline-item__resource code {
+  .audit-resource code {
     background: var(--bg-subtle);
     padding: 1px 6px;
     border-radius: 4px;
-    font-size: 0.84rem;
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .audit-actor {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+  .audit-chevron {
+    color: var(--text-faint);
+    transition: transform 0.18s ease;
+    width: 14px;
+    height: 14px;
+  }
+  .audit-entry[open] .audit-chevron { transform: rotate(90deg); }
+
+  .audit-entry--danger .audit-action { color: var(--danger-strong); }
+
+  .audit-detail {
+    padding: 0 18px 14px 122px;
+    background: rgba(31, 30, 29, 0.02);
+  }
+  .audit-detail__inner {
+    margin: 0;
+    padding: 10px 14px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-faint);
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    word-break: break-word;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 1100px) {
+    .audit-summary { grid-template-columns: 80px minmax(0, 1.4fr) minmax(0, 1.6fr) auto auto 16px; }
+    .audit-detail { padding-left: 18px; }
+  }
+  @media (max-width: 720px) {
+    .audit-summary {
+      grid-template-columns: 1fr auto;
+      grid-auto-flow: row;
+      gap: 6px 12px;
+    }
+    .audit-time { grid-column: 1 / -1; }
+    .audit-actor { max-width: none; }
+    .audit-chevron { grid-row: 1; grid-column: 2; }
   }
 </style>
 {% endblock %}
@@ -46,61 +144,63 @@
   </div>
 </header>
 
-<form method="get" action="/admin/audit" class="audit-filter-form">
-  <label>
-    <span>执行者</span>
-    <input type="text" name="actor" value="{{ filters.actor }}" placeholder="actor_ref 或类型" />
-  </label>
-  <label>
-    <span>动作</span>
-    <input type="text" name="action" value="{{ filters.action }}" placeholder="例如 domains.create" />
-  </label>
-  <label>
-    <span>资源</span>
-    <input type="text" name="resource" value="{{ filters.resource }}" placeholder="resource_ref 或类型" />
-  </label>
-  <label>
-    <span>开始时间</span>
-    <input type="text" name="start_time" value="{{ filters.start_time }}" placeholder="2026-04-18T00:00:00Z" />
-  </label>
-  <label>
-    <span>结束时间</span>
-    <input type="text" name="end_time" value="{{ filters.end_time }}" placeholder="2026-04-19T00:00:00Z" />
-  </label>
+<form method="get" action="/admin/audit" class="filter-bar">
+  <input
+    type="text"
+    name="action"
+    value="{{ filters.action }}"
+    placeholder="按动作过滤，例如 domains.create"
+    class="filter-bar__search"
+  />
+  <span class="filter-bar__chip">
+    <input type="text" name="actor" value="{{ filters.actor }}" placeholder="执行者（actor_ref 或类型）" />
+  </span>
+  <span class="filter-bar__chip">
+    <input type="text" name="resource" value="{{ filters.resource }}" placeholder="资源（resource_ref 或类型）" />
+  </span>
+  <span class="filter-bar__chip">
+    <input type="text" name="start_time" value="{{ filters.start_time }}" placeholder="起 2026-04-18T00:00:00Z" />
+  </span>
+  <span class="filter-bar__chip">
+    <input type="text" name="end_time" value="{{ filters.end_time }}" placeholder="止 2026-04-19T00:00:00Z" />
+  </span>
   <input type="hidden" name="limit" value="{{ pagination.limit }}" />
-  <div class="row">
-    <a class="button button--ghost" href="/admin/audit">清除</a>
-    <button class="button button--primary" type="submit">
-      <i data-lucide="filter"></i>筛选
-    </button>
-  </div>
+  <button class="button button--primary button--sm" type="submit">
+    <i data-lucide="filter"></i>筛选
+  </button>
+  <a class="button button--ghost button--sm" href="/admin/audit">清除</a>
 </form>
 
 {% if logs %}
-  <ul class="timeline">
+  <ul class="audit-list">
     {% for log in logs %}
-      <li class="timeline-item {% if log.status == 'success' %}timeline-item--success{% else %}timeline-item--danger{% endif %}">
-        <header class="timeline-item__head">
-          <div>
-            <span class="timeline-item__action">{{ cn_action(log.action) }}</span>
-            <span class="timeline-item__resource">
-              {{ cn_resource_type(log.resource_type) }}{% if log.resource_ref %} · <code>{{ log.resource_ref }}</code>{% endif %}
+      <li>
+        <details class="audit-entry {% if log.status != 'success' %}audit-entry--danger{% endif %}">
+          <summary class="audit-summary">
+            <span class="audit-time">{{ cn_datetime(log.created_at) }}</span>
+            <span class="audit-action">
+              <span class="audit-action__dot"></span>{{ cn_action(log.action) }}
             </span>
-          </div>
-          <span class="timeline-item__when">{{ cn_datetime(log.created_at) }}</span>
-        </header>
-        <div class="timeline-item__meta">
-          <strong style="color: var(--text-secondary);">{{ cn_actor_type(log.actor_type) }}</strong>
-          <span style="color: var(--text-faint);">·</span>
-          <span>{{ log.actor_ref or "系统" }}</span>
-          <span style="color: var(--text-faint);">·</span>
-          <span class="pill {% if log.status == 'success' %}pill--success{% else %}pill--danger{% endif %}">
-            {{ cn_audit_status(log.status) }}
-          </span>
-        </div>
-        {% if log.details %}
-          <div class="timeline-item__detail">{{ log.details }}</div>
-        {% endif %}
+            <span class="audit-resource">
+              {{ cn_resource_type(log.resource_type) }}
+              {% if log.resource_ref %}<code>{{ log.resource_ref }}</code>{% endif %}
+            </span>
+            <span class="audit-actor">{{ cn_actor_type(log.actor_type) }} · {{ log.actor_ref or "系统" }}</span>
+            <span class="pill {% if log.status == 'success' %}pill--success{% else %}pill--danger{% endif %}">
+              {{ cn_audit_status(log.status) }}
+            </span>
+            <svg class="audit-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </summary>
+          {% if log.details %}
+            <div class="audit-detail">
+              <pre class="audit-detail__inner">{{ log.details }}</pre>
+            </div>
+          {% else %}
+            <div class="audit-detail">
+              <pre class="audit-detail__inner muted">无附加详情</pre>
+            </div>
+          {% endif %}
+        </details>
       </li>
     {% endfor %}
   </ul>

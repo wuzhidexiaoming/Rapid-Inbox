@@ -3,13 +3,14 @@
 
 {% block head %}
 <style>
+  /* === Created key reveal === */
   .key-reveal {
     position: relative;
-    padding: 24px 28px;
-    margin-bottom: 24px;
+    padding: 22px 24px;
+    margin-bottom: 26px;
     background: linear-gradient(135deg, rgba(235, 242, 230, 0.85) 0%, var(--bg-elevated) 100%);
     border: 1px solid rgba(79, 125, 74, 0.32);
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xs);
   }
   .key-reveal__head {
@@ -20,29 +21,22 @@
   }
   .key-reveal__head-icon {
     display: inline-flex;
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
     align-items: center;
     justify-content: center;
     border-radius: 10px;
     background: var(--success);
     color: #fff;
+    flex-shrink: 0;
   }
-  .key-reveal__head h3 {
-    margin: 0;
-    color: var(--success-strong);
-    font-size: 1rem;
-  }
-  .key-reveal__head p {
-    margin: 2px 0 0;
-    color: var(--text-secondary);
-    font-size: 0.86rem;
-  }
+  .key-reveal__head h3 { margin: 0; color: var(--success-strong); font-size: 1rem; }
+  .key-reveal__head p { margin: 2px 0 0; color: var(--text-secondary); font-size: 0.86rem; }
   .key-value-box {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 14px 16px;
+    padding: 12px 14px;
     background: var(--bg-elevated);
     border: 1px solid rgba(79, 125, 74, 0.32);
     border-radius: 10px;
@@ -71,122 +65,66 @@
   }
   .copy-btn:hover { background: var(--success-strong); border-color: var(--success-strong); }
 
-  .scope-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 10px;
-  }
-
-  .choice-card {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    padding: 12px 14px;
-    background: var(--bg-elevated);
+  /* === List of existing keys === */
+  .key-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
-  }
-  .choice-card:hover {
-    border-color: var(--accent);
-    background: var(--accent-faint);
-  }
-  .choice-card:has(input:checked) {
-    border-color: var(--accent);
-    background: var(--accent-faint);
-  }
-  .choice-card input { margin: 2px 0 0; flex-shrink: 0; accent-color: var(--accent); }
-  .choice-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .choice-title { color: var(--text); font-weight: 600; font-size: 0.9rem; line-height: 1.3; }
-  .choice-desc { color: var(--text-muted); font-size: 0.82rem; line-height: 1.5; }
-
-  .domain-mode-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .domain-dropdown {
-    margin-top: 10px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     background: var(--bg-elevated);
     overflow: hidden;
   }
-  .domain-dropdown[open] { border-color: var(--accent); }
-  .domain-dropdown summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 12px 14px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    color: var(--text);
-    font-weight: 600;
-    font-size: 0.9rem;
-  }
-  .domain-dropdown summary::-webkit-details-marker { display: none; }
-  .domain-dropdown__hint { color: var(--text-muted); font-size: 0.84rem; font-weight: 500; margin-left: 6px; }
-  .domain-dropdown__chevron { color: var(--text-muted); transition: transform 0.2s ease; }
-  .domain-dropdown[open] .domain-dropdown__chevron { transform: rotate(180deg); }
-  .domain-dropdown__panel {
-    border-top: 1px solid var(--border-faint);
-    padding: 12px;
-    max-height: 22rem;
-    overflow-y: auto;
-    background: var(--bg-subtle);
-  }
-
-  .key-card {
+  .key-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 16px;
-    padding: 18px 20px;
+    align-items: center;
+    gap: 18px;
+    padding: 16px 20px;
     border-bottom: 1px solid var(--border-faint);
-    transition: background 0.15s ease, padding 0.15s ease;
+    transition: background 0.15s ease;
   }
-  .key-card:hover {
-    background: var(--accent-faint);
-    padding-left: 14px;
-    padding-right: 14px;
-  }
-  .key-card__head {
+  .key-row:last-child { border-bottom: 0; }
+  .key-row:hover { background: var(--accent-faint); }
+  .key-row__primary { min-width: 0; display: grid; gap: 4px; }
+  .key-row__head {
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
-    margin-bottom: 6px;
   }
-  .key-card__name {
+  .key-row__name {
     margin: 0;
     font-family: var(--font-serif);
-    font-size: 1.08rem;
+    font-size: 1.05rem;
     font-weight: 600;
     color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
   }
-  .key-card__id {
+  .key-row__id {
     color: var(--text-muted);
     font-family: var(--font-mono);
-    font-size: 0.82rem;
+    font-size: 0.78rem;
   }
-  .key-card__meta {
+  .key-row__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 12px;
+    gap: 10px 16px;
     align-items: center;
     font-size: 0.83rem;
     color: var(--text-muted);
   }
-  .key-card__meta span { display: inline-flex; align-items: center; gap: 4px; }
-  .key-card__pills {
+  .key-row__meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .key-row__chips {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin-top: 6px;
+    margin-top: 2px;
   }
-  .key-card__actions {
+  .key-row__actions {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -194,8 +132,167 @@
     justify-content: flex-end;
   }
 
+  /* === Drawer === */
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    background: rgba(31, 30, 29, 0.42);
+    backdrop-filter: blur(4px);
+  }
+  .drawer-backdrop.is-open { display: block; }
+  .drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(560px, 100vw);
+    z-index: 10000;
+    display: none;
+    flex-direction: column;
+    background: var(--bg-elevated);
+    box-shadow: -16px 0 36px rgba(31, 30, 29, 0.18);
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+  }
+  .drawer.is-open {
+    display: flex;
+    transform: translateX(0);
+  }
+  .drawer__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-faint);
+    flex-shrink: 0;
+  }
+  .drawer__head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-family: var(--font-serif);
+  }
+  .drawer__head p {
+    margin: 4px 0 0;
+    color: var(--text-muted);
+    font-size: 0.84rem;
+  }
+  .drawer__close {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .drawer__close:hover { background: var(--bg-subtle); color: var(--text); }
+  .drawer__body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 22px 16px;
+  }
+  .drawer__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--border-faint);
+    background: var(--bg-elevated);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .drawer__foot-hint {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .form-block { display: grid; gap: 8px; margin-bottom: 18px; }
+  .form-block:last-child { margin-bottom: 0; }
+  .form-block__label {
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+  .form-block__hint {
+    margin: -2px 0 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+  }
+
+  .scope-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+  }
+  .choice-card {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .choice-card:hover { border-color: var(--accent); background: var(--accent-faint); }
+  .choice-card:has(input:checked) { border-color: var(--accent); background: var(--accent-faint); }
+  .choice-card input { margin: 2px 0 0; flex-shrink: 0; accent-color: var(--accent); }
+  .choice-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .choice-title { color: var(--text); font-weight: 600; font-size: 0.88rem; line-height: 1.3; }
+  .choice-desc { color: var(--text-muted); font-size: 0.8rem; line-height: 1.45; }
+
+  .domain-mode-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .domain-dropdown {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--bg-elevated);
+    overflow: hidden;
+  }
+  .domain-dropdown[open] { border-color: var(--accent); }
+  .domain-dropdown summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.88rem;
+  }
+  .domain-dropdown summary::-webkit-details-marker { display: none; }
+  .domain-dropdown__hint { color: var(--text-muted); font-size: 0.82rem; font-weight: 500; margin-left: 6px; }
+  .domain-dropdown__chevron { color: var(--text-muted); transition: transform 0.2s ease; }
+  .domain-dropdown[open] .domain-dropdown__chevron { transform: rotate(180deg); }
+  .domain-dropdown__panel {
+    border-top: 1px solid var(--border-faint);
+    padding: 10px;
+    max-height: 18rem;
+    overflow-y: auto;
+    background: var(--bg-subtle);
+  }
+
   @media (max-width: 720px) {
-    .key-card { grid-template-columns: 1fr; }
+    .key-row { grid-template-columns: 1fr; }
+    .key-row__actions { justify-content: flex-start; }
     .domain-mode-row { grid-template-columns: 1fr; }
   }
 </style>
@@ -207,6 +304,11 @@
     <p class="eyebrow">访问控制</p>
     <h1>API 密钥</h1>
     <p class="page-header__lede">创建访问令牌用于系统集成，支持细粒度的作用域、域名与邮箱规则限制。</p>
+  </div>
+  <div class="page-header__actions">
+    <button type="button" class="button button--primary" data-drawer-open="create-key">
+      <i data-lucide="plus"></i>新建密钥
+    </button>
   </div>
 </header>
 
@@ -249,27 +351,28 @@
   </script>
 {% endif %}
 
-<section class="doc-section" id="key-list">
-  <header class="doc-section__intro">
-    <p class="eyebrow">现有密钥</p>
-    <h2>密钥清单 · 共 {{ pagination.total_count }} 个</h2>
-    <p>已创建的所有 API 密钥及其作用域、限速和最近使用情况。</p>
-  </header>
+<section aria-labelledby="key-list-heading">
+  <div class="row row--between" style="margin-bottom: 14px;">
+    <div>
+      <h2 id="key-list-heading" style="margin: 0; font-size: 1.15rem;">密钥清单</h2>
+      <p class="muted" style="margin: 2px 0 0; font-size: 0.86rem;">共 {{ pagination.total_count }} 个密钥</p>
+    </div>
+  </div>
 
   {% if api_keys %}
-    <ul class="list-flow" style="border-top: 0;">
+    <ul class="key-list">
       {% for api_key in api_keys %}
-        <li class="key-card">
-          <div style="min-width: 0;">
-            <div class="key-card__head">
-              <h3 class="key-card__name">{{ api_key.name }}</h3>
+        <li class="key-row">
+          <div class="key-row__primary">
+            <div class="key-row__head">
+              <h3 class="key-row__name">{{ api_key.name }}</h3>
               <span class="pill pill--neutral pill--plain">{{ cn_api_key_kind(api_key.kind) }}</span>
               <span class="pill {% if api_key.status == 'active' %}pill--success{% elif api_key.status == 'revoked' %}pill--danger{% else %}pill--neutral{% endif %}">
                 {{ cn_api_key_status(api_key.status) }}
               </span>
+              <span class="key-row__id">{{ api_key.public_id }}</span>
             </div>
-            <span class="key-card__id">{{ api_key.public_id }}</span>
-            <div class="key-card__meta" style="margin-top: 8px;">
+            <div class="key-row__meta">
               {% if api_key.domain_count > 0 %}
                 <span><i data-lucide="globe" style="width: 13px; height: 13px;"></i>{{ api_key.domain_count }} 个域名</span>
               {% else %}
@@ -278,34 +381,30 @@
               {% if api_key.mailbox_count > 0 %}
                 <span><i data-lucide="inbox" style="width: 13px; height: 13px;"></i>{{ api_key.mailbox_count }} 条邮箱规则</span>
               {% else %}
-                <span><i data-lucide="inbox" style="width: 13px; height: 13px;"></i>未限制邮箱规则</span>
+                <span><i data-lucide="inbox" style="width: 13px; height: 13px;"></i>未限制邮箱</span>
               {% endif %}
-              <span><i data-lucide="clock-3" style="width: 13px; height: 13px;"></i>最近使用 {{ cn_datetime(api_key.last_used_at, default="从未使用") }}</span>
+              <span><i data-lucide="clock-3" style="width: 13px; height: 13px;"></i>{{ cn_datetime(api_key.last_used_at, default="从未使用") }}</span>
             </div>
             {% if api_key.scopes %}
-              <div class="key-card__pills">
+              <div class="key-row__chips">
                 {% for scope in api_key.scopes.split(', ') %}
                   <span class="chip">{{ cn_api_key_scope(scope) }}</span>
                 {% endfor %}
               </div>
             {% endif %}
           </div>
-          <div class="key-card__actions">
+          <div class="key-row__actions">
+            <a class="button button--subtle button--sm" href="/admin/api-keys/{{ api_key.id }}">
+              <i data-lucide="settings-2"></i>编辑
+            </a>
             {% if api_key.status == 'active' %}
-              <form method="post" action="/admin/api-keys/{{ api_key.id }}/revoke" style="margin: 0; display: flex; gap: 6px;">
+              <form method="post" action="/admin/api-keys/{{ api_key.id }}/revoke" style="margin: 0;">
                 <input type="hidden" name="limit" value="{{ pagination.limit }}" />
                 <input type="hidden" name="offset" value="{{ pagination.offset }}" />
-                <a class="button button--subtle button--sm" href="/admin/api-keys/{{ api_key.id }}">
-                  <i data-lucide="settings-2"></i>编辑
-                </a>
                 <button class="button button--danger button--sm" type="submit">
                   <i data-lucide="x-circle"></i>吊销
                 </button>
               </form>
-            {% else %}
-              <a class="button button--subtle button--sm" href="/admin/api-keys/{{ api_key.id }}">
-                <i data-lucide="settings-2"></i>编辑
-              </a>
             {% endif %}
           </div>
         </li>
@@ -321,147 +420,219 @@
     <div class="empty-state">
       <span class="empty-state__icon"><i data-lucide="key-round"></i></span>
       <h3>还没有创建任何 API 密钥</h3>
-      <p>使用下方表单生成第一个密钥。</p>
+      <p>点击右上角"新建密钥"，生成第一个访问令牌。</p>
     </div>
   {% endif %}
 </section>
 
-<section class="doc-section" id="new-key">
-  <header class="doc-section__intro">
-    <p class="eyebrow">新建</p>
-    <h2>新增 API 密钥</h2>
-    <p>请直接勾选此密钥应具备的能力，不再支持手动填写作用域文本。</p>
+<div class="drawer-backdrop" data-drawer-backdrop="create-key" hidden></div>
+<aside
+  class="drawer"
+  data-drawer="create-key"
+  role="dialog"
+  aria-labelledby="create-key-title"
+  aria-modal="true"
+  hidden
+  {% if error %}data-drawer-autoopen="1"{% endif %}
+>
+  <header class="drawer__head">
+    <div>
+      <h2 id="create-key-title">新建 API 密钥</h2>
+      <p>勾选能力、限定域名与邮箱，确认后生成一次性可见的明文密钥。</p>
+    </div>
+    <button class="drawer__close" type="button" data-drawer-close aria-label="关闭">
+      <i data-lucide="x"></i>
+    </button>
   </header>
 
-  <form method="post" action="/admin/api-keys" class="doc-section__body">
-    <div class="form-grid form-grid--two">
-      <label>
-        <span>密钥名称</span>
-        <input type="text" name="name" value="{{ create_form.name }}" required />
-      </label>
-      <label>
-        <span>类型</span>
-        <select name="kind">
-          <option value="admin" {% if create_form.kind == "admin" %}selected{% endif %}>管理员级别</option>
-          <option value="service" {% if create_form.kind == "service" %}selected{% endif %}>服务级别</option>
-          <option value="public" {% if create_form.kind == "public" %}selected{% endif %}>公开访问</option>
-        </select>
-      </label>
-    </div>
+  <form method="post" action="/admin/api-keys" id="create-key-form">
+    <div class="drawer__body">
+      <div class="form-grid form-grid--two" style="margin-bottom: 18px;">
+        <label>
+          <span>密钥名称</span>
+          <input type="text" name="name" value="{{ create_form.name }}" required autofocus />
+        </label>
+        <label>
+          <span>类型</span>
+          <select name="kind">
+            <option value="admin" {% if create_form.kind == "admin" %}selected{% endif %}>管理员级别</option>
+            <option value="service" {% if create_form.kind == "service" %}selected{% endif %}>服务级别</option>
+            <option value="public" {% if create_form.kind == "public" %}selected{% endif %}>公开访问</option>
+          </select>
+        </label>
+      </div>
 
-    <div style="margin-top: 24px;">
-      <p style="margin: 0 0 4px; color: var(--text); font-size: 0.95rem; font-weight: 600;">作用域权限</p>
-      <p style="margin: 0 0 12px; color: var(--text-muted); font-size: 0.85rem;">勾选此密钥应具备的能力。</p>
-      <div class="scope-grid">
-        {% for scope in available_scopes %}
+      <div class="form-block">
+        <span class="form-block__label">作用域权限</span>
+        <p class="form-block__hint">勾选此密钥应具备的能力，至少一项。</p>
+        <div class="scope-grid">
+          {% for scope in available_scopes %}
+            <label class="choice-card">
+              <input type="checkbox" name="scopes" value="{{ scope.value }}" {% if scope.value in create_form.scopes %}checked{% endif %} />
+              <span class="choice-copy">
+                <span class="choice-title">{{ scope.label }}</span>
+                <span class="choice-desc">{{ scope.description }}</span>
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="form-block">
+        <span class="form-block__label">授权域名</span>
+        <p class="form-block__hint">"全部"会自动覆盖后续新增的可用域名。</p>
+        <div class="domain-mode-row">
           <label class="choice-card">
-            <input type="checkbox" name="scopes" value="{{ scope.value }}" {% if scope.value in create_form.scopes %}checked{% endif %} />
+            <input
+              type="radio"
+              name="domain_grant_mode"
+              value="all"
+              data-domain-mode
+              {% if create_form.domain_grant_mode != "selected" %}checked{% endif %}
+            />
             <span class="choice-copy">
-              <span class="choice-title">{{ scope.label }}</span>
-              <span class="choice-desc">{{ scope.description }}</span>
+              <span class="choice-title">授权所有可用域名</span>
+              <span class="choice-desc">覆盖当前与未来所有可用域名。</span>
             </span>
           </label>
-        {% endfor %}
-      </div>
-    </div>
-
-    <div style="margin-top: 24px;">
-      <p style="margin: 0 0 4px; color: var(--text); font-size: 0.95rem; font-weight: 600;">授权域名</p>
-      <p style="margin: 0 0 12px; color: var(--text-muted); font-size: 0.85rem;">选择"授权所有可用域名"时，此密钥可访问所有当前和后续新增的可用域名。</p>
-      <div class="domain-mode-row">
-        <label class="choice-card">
-          <input
-            type="radio"
-            name="domain_grant_mode"
-            value="all"
-            data-domain-mode
-            {% if create_form.domain_grant_mode != "selected" %}checked{% endif %}
-          />
-          <span class="choice-copy">
-            <span class="choice-title">授权所有可用域名</span>
-            <span class="choice-desc">覆盖所有当前域名，并自动覆盖后续新增的可用域名。</span>
-          </span>
-        </label>
-        <label class="choice-card">
-          <input
-            type="radio"
-            name="domain_grant_mode"
-            value="selected"
-            data-domain-mode
-            {% if create_form.domain_grant_mode == "selected" %}checked{% endif %}
-          />
-          <span class="choice-copy">
-            <span class="choice-title">仅授权选中的域名</span>
-            <span class="choice-desc">只允许访问下方勾选的已接入域名。</span>
-          </span>
-        </label>
-      </div>
-
-      {% if available_domains %}
-        <details class="domain-dropdown" data-domain-selector {% if create_form.domain_grant_mode == "selected" %}open{% endif %}>
-          <summary>
-            <span>
-              选择授权域名
-              <span class="domain-dropdown__hint" data-domain-summary>
-                {% if create_form.domain_grant_mode == "selected" and create_form.domain_ids %}
-                  已选择 {{ create_form.domain_ids | length }} 个域名
-                {% elif create_form.domain_grant_mode == "selected" %}
-                  请选择域名
-                {% else %}
-                  全部可用域名
-                {% endif %}
-              </span>
+          <label class="choice-card">
+            <input
+              type="radio"
+              name="domain_grant_mode"
+              value="selected"
+              data-domain-mode
+              {% if create_form.domain_grant_mode == "selected" %}checked{% endif %}
+            />
+            <span class="choice-copy">
+              <span class="choice-title">仅授权选中</span>
+              <span class="choice-desc">只允许访问下方勾选的域名。</span>
             </span>
-            <svg class="domain-dropdown__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </summary>
-          <div class="domain-dropdown__panel">
-            <div class="scope-grid">
-              {% for domain in available_domains %}
-                <label class="choice-card">
-                  <input
-                    type="checkbox"
-                    name="domain_ids"
-                    value="{{ domain.id }}"
-                    data-domain-id
-                    {% if (domain.id ~ '') in create_form.domain_ids %}checked{% endif %}
-                  />
-                  <span class="choice-copy">
-                    <span class="choice-title">{{ domain.root_domain_ascii }}</span>
-                    <span class="choice-desc">域名 ID：{{ domain.id }}</span>
-                  </span>
-                </label>
-              {% endfor %}
-            </div>
-          </div>
-        </details>
-      {% else %}
-        <div class="empty-state" style="margin-top: 12px;">
-          <p>当前还没有已接入域名。选择全部域名后，后续新增的可用域名会自动覆盖。</p>
+          </label>
         </div>
-      {% endif %}
+
+        {% if available_domains %}
+          <details class="domain-dropdown" data-domain-selector {% if create_form.domain_grant_mode == "selected" %}open{% endif %}>
+            <summary>
+              <span>
+                选择授权域名
+                <span class="domain-dropdown__hint" data-domain-summary>
+                  {% if create_form.domain_grant_mode == "selected" and create_form.domain_ids %}
+                    已选择 {{ create_form.domain_ids | length }} 个域名
+                  {% elif create_form.domain_grant_mode == "selected" %}
+                    请选择域名
+                  {% else %}
+                    全部可用域名
+                  {% endif %}
+                </span>
+              </span>
+              <svg class="domain-dropdown__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </summary>
+            <div class="domain-dropdown__panel">
+              <div class="scope-grid">
+                {% for domain in available_domains %}
+                  <label class="choice-card">
+                    <input
+                      type="checkbox"
+                      name="domain_ids"
+                      value="{{ domain.id }}"
+                      data-domain-id
+                      {% if (domain.id ~ '') in create_form.domain_ids %}checked{% endif %}
+                    />
+                    <span class="choice-copy">
+                      <span class="choice-title">{{ domain.root_domain_ascii }}</span>
+                      <span class="choice-desc">域名 ID：{{ domain.id }}</span>
+                    </span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </details>
+        {% else %}
+          <div class="empty-state" style="margin-top: 8px; padding: 24px 16px;">
+            <p>当前还没有已接入域名。"全部"会在新增域名后自动覆盖。</p>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="form-block">
+        <label>
+          <span class="form-block__label">邮箱匹配规则（可选）</span>
+          <input type="text" name="mailbox_patterns" value="{{ create_form.mailbox_patterns }}" placeholder="例如 *@adb.com, support@*" />
+        </label>
+        <p class="form-block__hint">逗号分隔；留空表示不按邮箱限制。</p>
+      </div>
     </div>
 
-    <div style="margin-top: 24px;">
-      <label>
-        <span>邮箱匹配规则</span>
-        <input type="text" name="mailbox_patterns" value="{{ create_form.mailbox_patterns }}" placeholder="可选：逗号分隔的规则，如 *@adb.com" />
-      </label>
-      <p style="margin: 8px 0 0; color: var(--text-muted); font-size: 0.84rem;">邮箱规则留空表示不按邮箱限制；域名未勾选时表示全部域名。</p>
-    </div>
-
-    <div class="action-bar">
-      <span class="action-bar__hint">明文密钥仅在创建后展示一次，请立即妥善保存。</span>
-      <div class="action-bar__buttons">
+    <footer class="drawer__foot">
+      <span class="drawer__foot-hint">明文密钥仅在创建后展示一次，请立即保存。</span>
+      <div class="row">
+        <button type="button" class="button button--ghost" data-drawer-close>取消</button>
         <button class="button button--primary" type="submit">
           <i data-lucide="key"></i>生成密钥
         </button>
       </div>
-    </div>
+    </footer>
   </form>
-</section>
+</aside>
+{% endblock %}
 
+{% block scripts %}
 <script>
   (() => {
+    // === Drawer controller ===
+    const openers = document.querySelectorAll('[data-drawer-open]');
+    const drawers = document.querySelectorAll('[data-drawer]');
+    const closers = document.querySelectorAll('[data-drawer-close]');
+    const backdrops = document.querySelectorAll('[data-drawer-backdrop]');
+
+    const drawerByName = new Map();
+    drawers.forEach((el) => drawerByName.set(el.getAttribute('data-drawer'), el));
+    const backdropByName = new Map();
+    backdrops.forEach((el) => backdropByName.set(el.getAttribute('data-drawer-backdrop'), el));
+
+    const openDrawer = (name) => {
+      const drawer = drawerByName.get(name);
+      const backdrop = backdropByName.get(name);
+      if (!drawer) return;
+      drawer.hidden = false;
+      if (backdrop) backdrop.hidden = false;
+      requestAnimationFrame(() => {
+        drawer.classList.add('is-open');
+        if (backdrop) backdrop.classList.add('is-open');
+      });
+      document.body.style.overflow = 'hidden';
+    };
+
+    const closeDrawer = (drawer) => {
+      const name = drawer.getAttribute('data-drawer');
+      const backdrop = backdropByName.get(name);
+      drawer.classList.remove('is-open');
+      if (backdrop) backdrop.classList.remove('is-open');
+      setTimeout(() => {
+        drawer.hidden = true;
+        if (backdrop) backdrop.hidden = true;
+      }, 220);
+      document.body.style.overflow = '';
+    };
+
+    const closeAll = () => drawers.forEach((d) => { if (d.classList.contains('is-open')) closeDrawer(d); });
+
+    openers.forEach((btn) => btn.addEventListener('click', () => openDrawer(btn.getAttribute('data-drawer-open'))));
+    closers.forEach((btn) => btn.addEventListener('click', () => {
+      const drawer = btn.closest('[data-drawer]');
+      if (drawer) closeDrawer(drawer);
+    }));
+    backdrops.forEach((bg) => bg.addEventListener('click', () => {
+      const name = bg.getAttribute('data-drawer-backdrop');
+      const drawer = drawerByName.get(name);
+      if (drawer) closeDrawer(drawer);
+    }));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
+
+    // Auto-open if there was a creation error
+    drawers.forEach((d) => { if (d.hasAttribute('data-drawer-autoopen')) openDrawer(d.getAttribute('data-drawer')); });
+
+    // === Domain selector summary ===
     const summary = document.querySelector('[data-domain-summary]');
     const domainInputs = Array.from(document.querySelectorAll('input[data-domain-id]'));
     const modeInputs = Array.from(document.querySelectorAll('input[data-domain-mode]'));

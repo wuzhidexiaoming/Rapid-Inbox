@@ -2,108 +2,147 @@
 
 {% block head %}
 <style>
-  .dash-greeting {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
-    gap: 24px;
-    padding-bottom: 26px;
+  /* === Compact greeting strip === */
+  .dash-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 24px;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 18px;
     border-bottom: 1px solid var(--border-faint);
-    margin-bottom: 32px;
+    margin-bottom: 24px;
   }
-  .dash-eyebrow-time {
-    margin: 0 0 6px;
-    color: var(--text-muted);
-    font-size: 0.86rem;
-    font-family: var(--font-mono);
-    letter-spacing: 0.04em;
-  }
-  .dash-headline {
+  .dash-strip__title {
     margin: 0;
     font-family: var(--font-serif);
-    font-size: 2.4rem;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
+    font-size: 1.55rem;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
   }
-  .dash-headline em {
+  .dash-strip__title em {
     color: var(--accent-strong);
     font-style: italic;
     font-weight: 600;
   }
-
-  .featured-stats {
-    display: grid;
-    grid-template-columns: 1.25fr repeat(3, 1fr);
-    gap: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    background: var(--bg-elevated);
-    margin-bottom: 38px;
-    box-shadow: var(--shadow-xs);
-  }
-  .featured-stats__cell {
-    padding: 22px 24px;
-    border-right: 1px solid var(--border-faint);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 0;
-  }
-  .featured-stats__cell:last-child { border-right: 0; }
-  .featured-stats__cell--lead {
-    background: linear-gradient(135deg, rgba(247, 236, 227, 0.7) 0%, transparent 70%);
-  }
-  .featured-stats__label {
+  .dash-strip__lede {
+    margin: 4px 0 0;
     color: var(--text-muted);
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-  .featured-stats__value {
-    font-family: var(--font-serif);
-    font-weight: 600;
-    font-size: 2.5rem;
-    line-height: 1.05;
-    color: var(--text);
-    letter-spacing: -0.02em;
-  }
-  .featured-stats__cell:not(.featured-stats__cell--lead) .featured-stats__value {
-    font-size: 1.75rem;
-  }
-  .featured-stats__hint {
-    color: var(--text-muted);
-    font-size: 0.82rem;
-    line-height: 1.5;
+    font-size: 0.86rem;
   }
 
-  .activity-grid {
-    display: grid;
-    grid-template-columns: 1.1fr 1fr;
-    gap: 48px;
+  /* === Section heading (compact) === */
+  .dash-section {
+    margin: 0 0 28px;
   }
-  .activity-block {
-    display: grid;
-    gap: 14px;
-  }
-  .activity-block__head {
+  .dash-section__head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    padding-bottom: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .dash-section__title {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .dash-section__hint {
+    color: var(--text-faint);
+    font-size: 0.82rem;
+  }
+
+  /* === Stat tiles === */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-elevated);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+  .stat-tile {
+    padding: 18px 20px;
+    border-right: 1px solid var(--border-faint);
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    position: relative;
+  }
+  .stat-tile:last-child { border-right: 0; }
+  .stat-tile__label {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .stat-tile__value {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 1.85rem;
+    line-height: 1.05;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  .stat-tile__hint {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+  .stat-tile--accent {
+    background: linear-gradient(135deg, rgba(247, 236, 227, 0.55) 0%, transparent 70%);
+  }
+  .stat-tile--accent .stat-tile__value { color: var(--accent-strong); }
+
+  /* state coloring for "today" tiles */
+  .stat-tile[data-state="warning"] .stat-tile__value { color: var(--warning-strong); }
+  .stat-tile[data-state="warning"]::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--warning);
+  }
+  .stat-tile[data-state="danger"] .stat-tile__value { color: var(--danger-strong); }
+  .stat-tile[data-state="danger"]::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--danger);
+  }
+
+  /* === Activity grid === */
+  .activity-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .activity-block {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .activity-block__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
     border-bottom: 1px solid var(--border-faint);
   }
   .activity-block__head h3 {
     margin: 0;
     font-family: var(--font-serif);
-    font-size: 1.15rem;
+    font-size: 1.02rem;
     font-weight: 600;
   }
   .activity-block__head a {
     color: var(--accent-strong);
-    font-size: 0.84rem;
+    font-size: 0.83rem;
     font-weight: 500;
     display: inline-flex;
     align-items: center;
@@ -111,36 +150,27 @@
   }
   .activity-block__head a:hover { color: var(--accent); }
 
-  .feed {
-    display: grid;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
+  .feed { margin: 0; padding: 0; list-style: none; }
   .feed-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 14px;
-    padding: 14px 0;
+    padding: 12px 20px;
     border-bottom: 1px solid var(--border-faint);
-    transition: padding 0.15s ease, background 0.15s ease;
+    transition: background 0.15s ease;
   }
   .feed-row:last-child { border-bottom: 0; }
-  .feed-row:hover {
-    background: var(--accent-faint);
-    padding-left: 12px;
-    padding-right: 12px;
-  }
+  .feed-row:hover { background: var(--accent-faint); }
   .feed-row__primary {
     display: grid;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
   }
   .feed-row__primary a, .feed-row__primary strong {
     color: var(--text);
     font-weight: 600;
-    font-size: 0.96rem;
+    font-size: 0.92rem;
     text-decoration: none;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -149,119 +179,201 @@
   .feed-row__primary a:hover { color: var(--accent-strong); }
   .feed-row__primary span {
     color: var(--text-muted);
-    font-size: 0.84rem;
+    font-size: 0.82rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
   .feed-empty {
-    padding: 36px 0;
+    padding: 36px 20px;
     text-align: center;
     color: var(--text-muted);
-    font-size: 0.92rem;
+    font-size: 0.88rem;
+  }
+
+  /* === Totals strip (footer) === */
+  .totals-strip {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-elevated);
+    overflow: hidden;
+  }
+  .totals-cell {
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-right: 1px solid var(--border-faint);
+    min-width: 0;
+  }
+  .totals-cell:last-child { border-right: 0; }
+  .totals-cell__icon {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--bg-subtle);
+    color: var(--accent-strong);
+  }
+  .totals-cell__icon svg { width: 16px; height: 16px; }
+  .totals-cell__copy { display: grid; gap: 0; min-width: 0; }
+  .totals-cell__label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+  }
+  .totals-cell__value {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.2;
   }
 
   @media (max-width: 1100px) {
-    .featured-stats { grid-template-columns: 1fr 1fr; }
-    .featured-stats__cell:nth-child(2) { border-right: 0; }
-    .featured-stats__cell { border-bottom: 1px solid var(--border-faint); }
-    .featured-stats__cell:nth-last-child(-n+2) { border-bottom: 0; }
-    .activity-grid { grid-template-columns: 1fr; gap: 28px; }
+    .stat-row, .totals-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat-tile, .totals-cell { border-right: 0; border-bottom: 1px solid var(--border-faint); }
+    .stat-tile:nth-child(2n), .totals-cell:nth-child(2n) { border-right: 0; }
+    .stat-tile:nth-last-child(-n+2), .totals-cell:nth-last-child(-n+1) { border-bottom: 0; }
+    .totals-strip .totals-cell:nth-child(odd) { border-right: 1px solid var(--border-faint); }
+    .activity-grid { grid-template-columns: 1fr; gap: 18px; }
   }
   @media (max-width: 640px) {
-    .dash-greeting { grid-template-columns: 1fr; align-items: start; }
-    .dash-headline { font-size: 1.8rem; }
-    .featured-stats { grid-template-columns: 1fr; }
-    .featured-stats__cell { border-right: 0; border-bottom: 1px solid var(--border-faint); }
-    .featured-stats__cell:last-child { border-bottom: 0; }
+    .dash-strip { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .stat-row, .totals-strip { grid-template-columns: 1fr; }
+    .stat-tile, .totals-cell { border-right: 0; }
+    .totals-strip .totals-cell:nth-child(odd) { border-right: 0; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<header class="dash-greeting">
+<header class="dash-strip">
   <div>
-    <p class="dash-eyebrow-time">控制台 · {{ admin_product_name }}</p>
-    <h1 class="dash-headline">
-      下午好，<em>{{ admin.display_name or admin.username }}</em>
-    </h1>
-    <p class="page-header__lede">这里汇总了系统当前的运行状态、最近接收到的邮件以及域名活动。</p>
+    <h1 class="dash-strip__title">下午好，<em>{{ admin.display_name or admin.username }}</em></h1>
+    <p class="dash-strip__lede">{{ admin_product_name }} · 系统当前的运行态势与最近活动</p>
   </div>
   <div class="page-header__actions">
-    <a href="/admin/domains" class="button button--primary">
-      <i data-lucide="plus"></i>新建域名
-    </a>
-    <a href="/admin/api-keys" class="button button--ghost">
-      <i data-lucide="key-round"></i>创建密钥
-    </a>
-    <a href="/admin/live" class="button button--subtle">
+    <a href="/admin/live" class="button button--ghost button--sm">
       <i data-lucide="activity"></i>实时监控
+    </a>
+    <a href="/admin/domains" class="button button--primary button--sm">
+      <i data-lucide="plus"></i>新增域名
     </a>
   </div>
 </header>
 
-<section class="featured-stats" aria-label="系统主要指标">
-  {% for item in stats %}
-    <div class="featured-stats__cell {% if loop.first %}featured-stats__cell--lead{% endif %}">
-      <span class="featured-stats__label">{{ item.label }}</span>
-      <span class="featured-stats__value">{{ item.value }}</span>
-      <span class="featured-stats__hint">{{ item.hint }}</span>
-    </div>
-  {% endfor %}
+<section class="dash-section" aria-labelledby="dash-live-title">
+  <div class="dash-section__head">
+    <h2 class="dash-section__title" id="dash-live-title">实时</h2>
+    <span class="dash-section__hint">SMTP 入站与最近接收速率</span>
+  </div>
+  <div class="stat-row">
+    {% for item in live_stats %}
+      <div class="stat-tile {% if loop.first %}stat-tile--accent{% endif %}" data-state="{{ item.state }}">
+        <span class="stat-tile__label">{{ item.label }}</span>
+        <span class="stat-tile__value">{{ item.value }}</span>
+        <span class="stat-tile__hint">{{ item.hint }}</span>
+      </div>
+    {% endfor %}
+  </div>
 </section>
 
-<section class="activity-grid">
-  <div class="activity-block">
-    <header class="activity-block__head">
-      <h3>近期接入域名</h3>
-      <a href="/admin/domains">
-        全部域名<i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
-      </a>
-    </header>
-    {% if recent_domains %}
-      <ul class="feed">
-        {% for domain in recent_domains %}
-          <li class="feed-row">
-            <div class="feed-row__primary">
-              <a href="/admin/domains/{{ domain.id }}">{{ domain.root_domain_ascii }}</a>
-              <span>接入于 {{ cn_datetime(domain.created_at) }}</span>
-            </div>
-            <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}">
-              {{ "已启用" if domain.is_active else "未启用" }}
-            </span>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <div class="feed-empty">暂无域名记录。</div>
-    {% endif %}
+<section class="dash-section" aria-labelledby="dash-today-title">
+  <div class="dash-section__head">
+    <h2 class="dash-section__title" id="dash-today-title">处理健康</h2>
+    <span class="dash-section__hint">解析积压、错误与磁盘占用</span>
   </div>
+  <div class="stat-row">
+    {% for item in today_stats %}
+      <div class="stat-tile" data-state="{{ item.state }}">
+        <span class="stat-tile__label">{{ item.label }}</span>
+        <span class="stat-tile__value">{{ item.value }}</span>
+        <span class="stat-tile__hint">{{ item.hint }}</span>
+      </div>
+    {% endfor %}
+  </div>
+</section>
 
-  <div class="activity-block">
-    <header class="activity-block__head">
-      <h3>最新接收邮件</h3>
-      <a href="/admin/messages">
-        全部邮件<i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
-      </a>
-    </header>
-    {% if recent_messages %}
-      <ul class="feed">
-        {% for message in recent_messages %}
-          <li class="feed-row">
-            <div class="feed-row__primary">
-              <strong>{{ message.subject or "（无主题）" }}</strong>
-              <span>来自 {{ message.from_addr or "未知发件人" }}</span>
-            </div>
-            <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}">
-              {{ cn_parse_status(message.parse_status) }}
-            </span>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <div class="feed-empty">暂无邮件记录。</div>
-    {% endif %}
+<section class="dash-section" aria-labelledby="dash-activity-title">
+  <div class="dash-section__head">
+    <h2 class="dash-section__title" id="dash-activity-title">近期活动</h2>
+  </div>
+  <div class="activity-grid">
+    <div class="activity-block">
+      <header class="activity-block__head">
+        <h3>最新接收邮件</h3>
+        <a href="/admin/messages">
+          全部邮件<i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+        </a>
+      </header>
+      {% if recent_messages %}
+        <ul class="feed">
+          {% for message in recent_messages %}
+            <li class="feed-row">
+              <div class="feed-row__primary">
+                <a href="/admin/messages/{{ message.id }}">{{ message.subject or "（无主题）" }}</a>
+                <span>来自 {{ message.from_addr or "未知发件人" }} · {{ cn_datetime(message.received_at) }}</span>
+              </div>
+              <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}">
+                {{ cn_parse_status(message.parse_status) }}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="feed-empty">暂无邮件记录。</div>
+      {% endif %}
+    </div>
+
+    <div class="activity-block">
+      <header class="activity-block__head">
+        <h3>近期接入域名</h3>
+        <a href="/admin/domains">
+          全部域名<i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+        </a>
+      </header>
+      {% if recent_domains %}
+        <ul class="feed">
+          {% for domain in recent_domains %}
+            <li class="feed-row">
+              <div class="feed-row__primary">
+                <a href="/admin/domains/{{ domain.id }}">{{ domain.root_domain_ascii }}</a>
+                <span>接入于 {{ cn_datetime(domain.created_at) }}</span>
+              </div>
+              <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}">
+                {{ "已启用" if domain.is_active else "未启用" }}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="feed-empty">暂无域名记录。</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="dash-section" aria-labelledby="dash-totals-title">
+  <div class="dash-section__head">
+    <h2 class="dash-section__title" id="dash-totals-title">系统总览</h2>
+    <span class="dash-section__hint">累积建档数据</span>
+  </div>
+  <div class="totals-strip">
+    {% for item in totals %}
+      <div class="totals-cell">
+        <span class="totals-cell__icon"><i data-lucide="{{ item.icon }}"></i></span>
+        <span class="totals-cell__copy">
+          <span class="totals-cell__label">{{ item.label }}</span>
+          <span class="totals-cell__value">{{ item.value }}</span>
+        </span>
+      </div>
+    {% endfor %}
   </div>
 </section>
 {% endblock %}

@@ -358,73 +358,78 @@ def _dashboard_stats(request: Request) -> dict[str, Any]:
             ).fetchall()
         ]
 
+    sessions_value = stats["active_connections"] or stats["open_sessions"]
+    disk_threshold = runtime.settings.disk_warning_threshold_percent
+    disk_state = (
+        "danger" if disk_used_percent >= disk_threshold
+        else ("warning" if disk_used_percent >= max(disk_threshold - 15, 0) else "ok")
+    )
+    failed_today = stats["failed_last_day"]
+    failed_state = "danger" if failed_today > 0 else "ok"
+    pending_state = "warning" if stats["pending_messages"] > 0 else "ok"
+
     return {
-        "stats": [
+        # Layer 1 — live signals (top of dashboard, real-time)
+        "live_stats": [
             {
                 "label": "当前 SMTP 会话",
-                "value": stats["active_connections"] or stats["open_sessions"],
+                "value": sessions_value,
                 "hint": "仍在监听器上保持连接的 SMTP 会话数。",
+                "state": "ok" if sessions_value else "idle",
             },
             {
                 "label": "1 分钟接收速率",
                 "value": f"{stats['received_last_minute']}/min",
-                "hint": "最近 60 秒成功投递的邮件投递数。",
+                "hint": "最近 60 秒成功投递的邮件数。",
+                "state": "ok",
             },
             {
                 "label": "5 分钟接收速率",
                 "value": f"{stats['received_last_five_minutes'] / 5:.1f}/min",
                 "hint": "最近 5 分钟平均每分钟投递数。",
+                "state": "ok",
             },
             {
                 "label": "24 小时接收量",
                 "value": stats["received_last_day"],
-                "hint": "过去 24 小时成功投递到邮箱的邮件数。",
+                "hint": "过去 24 小时投递到邮箱的邮件数。",
+                "state": "ok",
             },
-            {
-                "label": "24 小时解析失败",
-                "value": stats["failed_last_day"],
-                "hint": "过去 24 小时进入解析失败状态的邮件数。",
-            },
-            {
-                "label": "磁盘使用",
-                "value": f"{disk_used_percent:.1f}%",
-                "hint": f"存储分区已用 {cn_bytes(disk_usage.used)} / {cn_bytes(disk_usage.total)}，告警阈值 {runtime.settings.disk_warning_threshold_percent}%。",
-            },
-            {
-                "label": "已接入域名",
-                "value": stats["domains"],
-                "hint": "正在托管并接收邮件的根域名数量。",
-            },
-            {
-                "label": "已收录邮箱",
-                "value": stats["mailboxes"],
-                "hint": "系统中已建立索引的公开邮箱数量。",
-            },
-            {
-                "label": "邮件总数",
-                "value": stats["messages"],
-                "hint": "已被系统接收并建立索引的邮件数量。",
-            },
+        ],
+        # Layer 2 — today's processing health
+        "today_stats": [
             {
                 "label": "待解析邮件",
                 "value": stats["pending_messages"],
-                "hint": "已经入库、仍在等待 MIME 解析的邮件。",
+                "hint": "已入库、仍在等待 MIME 解析。",
+                "state": pending_state,
             },
             {
                 "label": "解析失败",
                 "value": stats["failed_messages"],
-                "hint": "解析出错、需要人工关注的邮件。",
+                "hint": "解析出错、需要人工关注。",
+                "state": "danger" if stats["failed_messages"] > 0 else "ok",
             },
             {
-                "label": "API 密钥",
-                "value": stats["api_keys"],
-                "hint": "用于管理端、服务端与公开访问的密钥总数。",
+                "label": "24 小时解析失败",
+                "value": failed_today,
+                "hint": "过去 24 小时进入解析失败的邮件。",
+                "state": failed_state,
             },
             {
-                "label": "审计日志",
-                "value": stats["audit_logs"],
-                "hint": "已经记录的管理操作与系统行为。",
+                "label": "磁盘使用",
+                "value": f"{disk_used_percent:.1f}%",
+                "hint": f"已用 {cn_bytes(disk_usage.used)} / {cn_bytes(disk_usage.total)}，阈值 {disk_threshold}%。",
+                "state": disk_state,
             },
+        ],
+        # Layer 3 — totals (small reference at bottom)
+        "totals": [
+            {"label": "已接入域名", "value": stats["domains"], "icon": "globe"},
+            {"label": "已收录邮箱", "value": stats["mailboxes"], "icon": "inbox"},
+            {"label": "邮件总数", "value": stats["messages"], "icon": "mail"},
+            {"label": "API 密钥", "value": stats["api_keys"], "icon": "key-round"},
+            {"label": "审计记录", "value": stats["audit_logs"], "icon": "scroll-text"},
         ],
         "recent_domains": recent_domains,
         "recent_messages": recent_messages,

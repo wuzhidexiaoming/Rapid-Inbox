@@ -2,42 +2,9 @@
 
 {% block head %}
 <style>
-  .runtime-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 14px;
-  }
-  .runtime-cell {
-    padding: 16px 18px;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    display: grid;
-    gap: 6px;
-  }
-  .runtime-cell__label {
-    color: var(--text-muted);
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .runtime-cell__value {
-    font-family: var(--font-mono);
-    font-size: 1.1rem;
-    color: var(--text);
-    word-break: break-all;
-  }
-  .runtime-cell__hint {
-    color: var(--text-muted);
-    font-size: 0.82rem;
-    line-height: 1.5;
-    margin: 0;
-  }
-
   .horiz-row {
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 240px minmax(0, 1fr);
     gap: 18px;
     align-items: center;
     padding: 14px 0;
@@ -45,14 +12,50 @@
   }
   .horiz-row:first-of-type { border-top: 0; padding-top: 0; }
   .horiz-row__label {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
+    color: var(--text);
+    font-size: 0.92rem;
     font-weight: 600;
   }
   .horiz-row__hint {
     color: var(--text-muted);
     font-size: 0.82rem;
-    margin-top: 3px;
+    margin: 3px 0 0;
+  }
+
+  .ref-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border-faint);
+  }
+  .ref-cell {
+    padding: 12px 14px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-faint);
+    border-radius: 10px;
+    display: grid;
+    gap: 4px;
+  }
+  .ref-cell__label {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .ref-cell__value {
+    font-family: var(--font-mono);
+    font-size: 0.92rem;
+    color: var(--text);
+    word-break: break-all;
+  }
+  .ref-cell__hint {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin: 0;
   }
 
   .danger-stat-row {
@@ -103,7 +106,7 @@
   <div>
     <p class="eyebrow">系统</p>
     <h1>系统设置</h1>
-    <p class="page-header__lede">查看运行参数、调整接收限制、修改管理员密码或清除全部邮件数据。</p>
+    <p class="page-header__lede">调整运行参数、修改管理员密码或清除全部邮件数据。</p>
   </div>
 </header>
 
@@ -141,8 +144,7 @@
 <div class="split-page">
   <nav class="split-page__nav" aria-label="设置章节">
     <p class="split-page__nav-label">章节</p>
-    <a href="#runtime"><i data-lucide="gauge"></i>运行参数</a>
-    <a href="#tuning"><i data-lucide="sliders-horizontal"></i>调整限制</a>
+    <a href="#runtime"><i data-lucide="sliders-horizontal"></i>运行参数</a>
     <a href="#password"><i data-lucide="key-round"></i>修改管理员密码</a>
     <a href="#cleanup"><i data-lucide="trash-2"></i>清除邮件</a>
   </nav>
@@ -151,30 +153,10 @@
     <section class="doc-section" id="runtime">
       <header class="doc-section__intro">
         <p class="eyebrow">运行参数</p>
-        <h2>当前生效配置</h2>
-        <p>这些参数会直接影响 SMTP 接收行为以及后台会话超时策略。</p>
+        <h2>SMTP 接收策略</h2>
+        <p>这些参数会写入 <code>system_settings</code>，并在当前运行进程中立即生效。</p>
       </header>
-      {% if settings_items %}
-        <div class="runtime-grid">
-          {% for item in settings_items %}
-            <div class="runtime-cell">
-              <span class="runtime-cell__label">{{ item.label }}</span>
-              <span class="runtime-cell__value">{{ item.value }}</span>
-              <p class="runtime-cell__hint">{{ item.hint }}</p>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="empty-state"><p>当前没有可展示的系统设置</p></div>
-      {% endif %}
-    </section>
 
-    <section class="doc-section" id="tuning">
-      <header class="doc-section__intro">
-        <p class="eyebrow">运行保护</p>
-        <h2>调整接收限制</h2>
-        <p>这些设置会写入 <code>system_settings</code>，并在当前运行进程中立即生效。</p>
-      </header>
       <form method="post" action="/admin/settings">
         <div class="horiz-row">
           <div>
@@ -225,6 +207,29 @@
           </div>
           <input type="number" min="1" max="100" step="1" name="disk_warning_threshold_percent" value="{{ settings_form.disk_warning_threshold_percent }}" required />
         </div>
+
+        {% if settings_items %}
+          <div class="ref-grid" aria-label="只读运行信息">
+            {% for item in settings_items %}
+              {% if item.label not in [
+                "最大邮件大小",
+                "单封邮件最大收件人数",
+                "SMTP 空闲超时",
+                "SMTP 并发连接上限",
+                "每 IP 短窗口连接上限",
+                "SMTP 连接限流窗口",
+                "磁盘告警阈值",
+              ] %}
+                <div class="ref-cell">
+                  <span class="ref-cell__label">{{ item.label }}</span>
+                  <span class="ref-cell__value">{{ item.value }}</span>
+                  <p class="ref-cell__hint">{{ item.hint }}</p>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endif %}
+
         <div class="action-bar">
           <span class="action-bar__hint">所有调整保存后立即在当前运行进程中生效。</span>
           <div class="action-bar__buttons">
