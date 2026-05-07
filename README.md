@@ -48,6 +48,8 @@ http://127.0.0.1:8000/admin/login
 密码：change-me-now
 ```
 
+首次使用 bootstrap 管理员登录后，后台会强制进入系统设置页修改初始密码；完成改密前不能访问其他后台页面。
+
 默认启动器会使用当前工作目录作为项目运行目录。从仓库根目录启动时，数据会写入：
 
 ```text
@@ -96,6 +98,11 @@ HTTP 与内嵌 SMTP 同进程启动：
 | `SMTP_PORT` | `25` | SMTP 监听端口 |
 | `MAX_MESSAGE_SIZE_BYTES` | `52428800` | 单封邮件最大体积 |
 | `MAX_RECIPIENTS_PER_MESSAGE` | `20` | 单封邮件最大收件人数 |
+| `SMTP_IDLE_TIMEOUT_SECONDS` | `300` | SMTP 会话空闲断开时间 |
+| `SMTP_MAX_CONCURRENT_CONNECTIONS` | `100` | SMTP 并发连接上限，`0` 表示不限制 |
+| `SMTP_CONNECTION_RATE_LIMIT_COUNT` | `20` | 每个 IP 在短窗口内允许建立的 SMTP 连接数，`0` 表示不限制 |
+| `SMTP_CONNECTION_RATE_LIMIT_WINDOW_SECONDS` | `60` | SMTP per-IP 连接限流窗口 |
+| `DISK_WARNING_THRESHOLD_PERCENT` | `85` | Dashboard 磁盘使用率告警阈值 |
 | `ADMIN_TOKEN` | `dev-admin-token` | 兼容管理 API 的管理令牌 |
 | `PUBLIC_API_KEY` | `public-demo-key` | 兼容公开 API 的默认访问密钥 |
 
@@ -129,6 +136,14 @@ GET /mail/{mailbox_address}/{delivery_id}/attachments/{attachment_id}
 curl \
   -H "X-API-Key: public-demo-key" \
   "http://127.0.0.1:8000/api/v1/public/mailboxes/code@example.com/messages"
+```
+
+公开 API 列表支持 `limit`、兼容旧版的 `offset`，并返回 `next_cursor`。新集成建议使用 `next_cursor` 继续翻页：
+
+```bash
+curl \
+  -H "X-API-Key: public-demo-key" \
+  "http://127.0.0.1:8000/api/v1/public/mailboxes/code@example.com/messages?limit=20&cursor=<next_cursor>"
 ```
 
 ## 数据与保留策略

@@ -44,8 +44,14 @@ class AuthService:
         await self.writer.execute(
             lambda connection: connection.execute(
                 """
-                INSERT INTO admins (username, password_hash, created_at, updated_at)
-                SELECT ?, ?, ?, ?
+                INSERT INTO admins (
+                    username,
+                    password_hash,
+                    must_change_password,
+                    created_at,
+                    updated_at
+                )
+                SELECT ?, ?, 1, ?, ?
                 WHERE NOT EXISTS (
                     SELECT 1
                     FROM admins
@@ -70,6 +76,7 @@ class AuthService:
                     display_name,
                     role,
                     is_active,
+                    must_change_password,
                     created_at,
                     updated_at,
                     last_login_at,
@@ -124,6 +131,7 @@ class AuthService:
                 """
                 UPDATE admins
                 SET password_hash = ?,
+                    must_change_password = 0,
                     updated_at = ?
                 WHERE id = ? AND is_active = 1
                 """,
@@ -210,6 +218,7 @@ class AuthService:
                     a.display_name,
                     a.role,
                     a.is_active,
+                    a.must_change_password,
                     a.created_at,
                     a.updated_at,
                     a.last_login_at,
@@ -273,6 +282,7 @@ class AuthService:
             "display_name": row["display_name"],
             "role": row["role"],
             "is_active": bool(row["is_active"]),
+            "must_change_password": bool(row["must_change_password"]),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "last_login_at": row["last_login_at"],

@@ -91,6 +91,27 @@
     <p class="muted" style="margin: 0; font-size: 0.95rem;">全局查看系统收入的所有邮件记录，快速检查主题、发件人、解析状态及附件挂载情况。</p>
   </div>
 
+  <form method="get" action="/admin/messages" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
+    <input type="text" name="q" value="{{ filters.q }}" placeholder="主题、发件人或收件人" />
+    <select name="parse_status">
+      <option value="">全部解析状态</option>
+      <option value="pending" {% if filters.parse_status == "pending" %}selected{% endif %}>解析中</option>
+      <option value="parsed" {% if filters.parse_status == "parsed" %}selected{% endif %}>已解析</option>
+      <option value="failed" {% if filters.parse_status == "failed" %}selected{% endif %}>解析失败</option>
+    </select>
+    <select name="mailbox_id">
+      <option value="">全部邮箱</option>
+      {% for mailbox in mailboxes %}
+        <option value="{{ mailbox.id }}" {% if filters.mailbox_id == (mailbox.id ~ '') %}selected{% endif %}>{{ mailbox.address_canonical }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+    <div class="button-row">
+      <button class="button button--primary" type="submit">筛选</button>
+      <a class="button button--ghost" href="/admin/messages">清除</a>
+    </div>
+  </form>
+
   {% if messages %}
     <div class="table-wrap">
       <table class="table">
@@ -106,9 +127,9 @@
           {% for message in messages %}
             <tr class="message-row">
               <td class="subject-col">
-                <span class="subject-text" title="{{ message.subject or '（无主题）' }}">
+                <a class="subject-text" href="/admin/messages/{{ message.id }}" title="{{ message.subject or '（无主题）' }}">
                   {{ message.subject or "（无主题）" }}
-                </span>
+                </a>
                 <div class="sender-text">来自: {{ message.from_addr or "未知发件人" }}</div>
                 <div class="recipient-text" title="{{ message.recipients or '未知收件人' }}">
                   收件人: {{ message.recipients or "未知收件人" }}

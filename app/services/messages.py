@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import base64
 import html
+import json
 import re
 import sqlite3
 from typing import Any
 
 from app.db.connection import connect_database
+from app.ingest.storage import utc_now
 from app.ingest.queue import ParseTask
 
 
@@ -58,12 +60,14 @@ class MessageService:
         *,
         limit: int = 50,
         offset: int = 0,
+        cursor: tuple[str, str] | None = None,
         request_ip: str | None = None,
     ) -> dict[str, Any]:
         return await self._runtime.get_mailbox_view(
             mailbox_address,
             limit=limit,
             offset=offset,
+            cursor=cursor,
             request_ip=request_ip,
         )
 
@@ -104,6 +108,230 @@ class MessageService:
             raise LookupError("message not found")
         await self._runtime.parse_queue.enqueue(ParseTask(message_id=message_id))
 
+    def list_messages(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        query: str | None = None,
+        parse_status: str | None = None,
+        mailbox_id: int | None = None,
+    ) -> dict[str, Any]:
+        where_sql, params = self._message_filter_sql(
+            query=query,
+            parse_status=parse_status,
+            mailbox_id=mailbox_id,
+        )
+        with connect_database(self._runtime.settings.database_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                    m.id,
+                    m.subject,
+                    m.from_addr,
+                    COALESCE(
+                        (
+                            SELECT GROUP_CONCAT(rcpt_to, ', ')
+                            FROM (
+                                SELECT DISTINCT rcpt_to
+                                FROM message_deliveries
+                                WHERE message_id = m.id
+                                ORDER BY rcpt_to ASC
+                            )
+                        ),
+                        ''
+                    ) AS recipients,
+                    m.received_at,
+                    m.parse_status,
+                    m.parse_error,
+                    m.has_attachments,
+                    m.attachment_count,
+                    COUNT(d.id) AS delivery_count
+                FROM messages AS m
+                LEFT JOIN message_deliveries AS d ON d.message_id = m.id
+                {where_sql}
+                GROUP BY m.id
+                ORDER BY m.received_at DESC, m.id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (*params, limit, offset),
+            ).fetchall()
+            total = connection.execute(
+                f"""
+                SELECT COUNT(DISTINCT m.id) AS count
+                FROM messages AS m
+                LEFT JOIN message_deliveries AS d ON d.message_id = m.id
+                {where_sql}
+                """,
+                tuple(params),
+            ).fetchone()
+        return {
+            "items": [dict(row) for row in rows],
+            "total_count": 0 if total is None else int(total["count"]),
+        }
+
+    def get_admin_message_detail(self, message_id: str) -> dict[str, Any]:
+        with connect_database(self._runtime.settings.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    smtp_session_id,
+                    raw_path,
+                    raw_sha256,
+                    raw_size_bytes,
+                    envelope_from,
+                    message_id_header,
+                    subject,
+                    from_name,
+                    from_addr,
+                    reply_to,
+                    date_header,
+                    received_at,
+                    indexed_at,
+                    parse_status,
+                    parse_error,
+                    has_text,
+                    has_html,
+                    has_attachments,
+                    attachment_count,
+                    text_preview,
+                    text_body_path,
+                    html_body_path,
+                    headers_json
+                FROM messages
+                WHERE id = ?
+                """,
+                (message_id,),
+            ).fetchone()
+            if row is None:
+                raise LookupError("message not found")
+            deliveries = connection.execute(
+                """
+                SELECT
+                    d.id AS delivery_id,
+                    d.mailbox_id,
+                    mb.address_canonical AS mailbox,
+                    d.rcpt_to,
+                    d.delivered_at,
+                    d.status,
+                    d.deleted_at
+                FROM message_deliveries AS d
+                JOIN mailboxes AS mb ON mb.id = d.mailbox_id
+                WHERE d.message_id = ?
+                ORDER BY d.delivered_at DESC, d.id DESC
+                """,
+                (message_id,),
+            ).fetchall()
+            attachments = connection.execute(
+                """
+                SELECT
+                    id,
+                    filename,
+                    safe_filename,
+                    content_type,
+                    content_disposition,
+                    content_id,
+                    storage_path,
+                    size_bytes,
+                    is_inline
+                FROM attachments
+                WHERE message_id = ?
+                ORDER BY part_index ASC
+                """,
+                (message_id,),
+            ).fetchall()
+
+        payload = dict(row)
+        for key in ("has_text", "has_html", "has_attachments"):
+            payload[key] = bool(payload[key])
+        payload["text_body"] = self._runtime.storage.read_text(payload.get("text_body_path")) or ""
+        payload["html_body"] = self._runtime.storage.read_text(payload.get("html_body_path")) or ""
+        payload["headers"] = json.loads(payload.get("headers_json") or "[]")
+        payload.pop("headers_json", None)
+        payload["deliveries"] = [dict(delivery) for delivery in deliveries]
+        payload["attachments"] = [dict(attachment) for attachment in attachments]
+        return payload
+
+    def get_admin_delivery_detail(self, delivery_id: str) -> dict[str, Any]:
+        with connect_database(self._runtime.settings.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT message_id
+                FROM message_deliveries
+                WHERE id = ?
+                """,
+                (delivery_id,),
+            ).fetchone()
+        if row is None:
+            raise LookupError("delivery not found")
+        detail = self.get_admin_message_detail(str(row["message_id"]))
+        detail["selected_delivery_id"] = delivery_id
+        return detail
+
+    def get_admin_raw_message(self, message_id: str) -> bytes:
+        detail = self.get_admin_message_detail(message_id)
+        return self._runtime.storage.read_bytes(detail["raw_path"])
+
+    def get_admin_attachment(self, message_id: str, attachment_id: str) -> dict[str, Any]:
+        detail = self.get_admin_message_detail(message_id)
+        for attachment in detail["attachments"]:
+            if attachment["id"] != attachment_id:
+                continue
+            payload = dict(attachment)
+            payload["content"] = self._runtime.storage.read_bytes(attachment["storage_path"])
+            return payload
+        raise LookupError("attachment not found")
+
+    async def soft_delete_delivery(self, delivery_id: str) -> dict[str, Any]:
+        result = await self.soft_delete_deliveries([delivery_id])
+        if result["deleted"] == 0:
+            raise LookupError("delivery not found")
+        return result
+
+    async def soft_delete_deliveries(self, delivery_ids: list[str]) -> dict[str, Any]:
+        deleted_at = utc_now()
+        unique_ids = []
+        seen: set[str] = set()
+        for delivery_id in delivery_ids:
+            if delivery_id in seen:
+                continue
+            seen.add(delivery_id)
+            unique_ids.append(delivery_id)
+        if not unique_ids:
+            return {"deleted": 0, "delivery_ids": []}
+
+        def operation(connection: sqlite3.Connection) -> dict[str, Any]:
+            placeholders = ", ".join("?" for _ in unique_ids)
+            rows = connection.execute(
+                f"""
+                SELECT id, mailbox_id
+                FROM message_deliveries
+                WHERE id IN ({placeholders}) AND status = 'active'
+                """,
+                tuple(unique_ids),
+            ).fetchall()
+            if not rows:
+                return {"deleted": 0, "delivery_ids": []}
+            connection.execute(
+                f"""
+                UPDATE message_deliveries
+                SET status = 'deleted',
+                    deleted_at = COALESCE(deleted_at, ?)
+                WHERE id IN ({placeholders}) AND status = 'active'
+                """,
+                (deleted_at, *unique_ids),
+            )
+            mailbox_ids = sorted({int(row["mailbox_id"]) for row in rows})
+            for mailbox_id in mailbox_ids:
+                self._runtime._refresh_mailbox_summary_after_message_delete(connection, mailbox_id)
+            return {
+                "deleted": len(rows),
+                "delivery_ids": [str(row["id"]) for row in rows],
+            }
+
+        return await self._runtime.writer.execute(operation)
+
     async def get_public_mailbox_view(
         self,
         mailbox_address: str,
@@ -111,6 +339,7 @@ class MessageService:
         surface: str,
         limit: int = 50,
         offset: int = 0,
+        cursor: tuple[str, str] | None = None,
         request_ip: str | None = None,
     ) -> dict[str, Any]:
         canonical_mailbox_address = await self._require_public_surface_enabled(mailbox_address, surface)
@@ -118,6 +347,7 @@ class MessageService:
             canonical_mailbox_address,
             limit=limit,
             offset=offset,
+            cursor=cursor,
             request_ip=request_ip,
         )
         items = [self._prepare_public_mailbox_item(item, surface=surface) for item in mailbox["items"]]
@@ -293,6 +523,33 @@ class MessageService:
 
     def _normalize_content_type(self, value: Any) -> str:
         return str(value or "").split(";", 1)[0].strip().lower()
+
+    def _message_filter_sql(
+        self,
+        *,
+        query: str | None,
+        parse_status: str | None,
+        mailbox_id: int | None,
+    ) -> tuple[str, list[Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if query:
+            pattern = f"%{query.strip()}%"
+            clauses.append(
+                "(m.subject LIKE ? OR m.from_addr LIKE ? OR m.envelope_from LIKE ? OR d.rcpt_to LIKE ?)"
+            )
+            params.extend([pattern, pattern, pattern, pattern])
+        if parse_status:
+            if parse_status not in {"pending", "parsed", "failed"}:
+                raise ValueError("invalid parse_status")
+            clauses.append("m.parse_status = ?")
+            params.append(parse_status)
+        if mailbox_id is not None:
+            clauses.append("d.mailbox_id = ?")
+            params.append(int(mailbox_id))
+        if not clauses:
+            return "", params
+        return "WHERE " + " AND ".join(clauses), params
 
     def _prepare_public_mailbox_item(self, item: dict[str, Any], *, surface: str) -> dict[str, Any]:
         payload = dict(item)

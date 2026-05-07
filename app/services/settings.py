@@ -11,8 +11,17 @@ class SettingsService:
     SUPPORTED_SETTINGS = {
         "max_message_size_bytes",
         "max_recipients_per_message",
+        "smtp_idle_timeout_seconds",
+        "smtp_max_concurrent_connections",
+        "smtp_connection_rate_limit_count",
+        "smtp_connection_rate_limit_window_seconds",
+        "disk_warning_threshold_percent",
     }
     INTEGER_SETTINGS = SUPPORTED_SETTINGS
+    NON_NEGATIVE_INTEGER_SETTINGS = {
+        "smtp_max_concurrent_connections",
+        "smtp_connection_rate_limit_count",
+    }
 
     def __init__(self, runtime: Any) -> None:
         self._runtime = runtime
@@ -61,6 +70,13 @@ class SettingsService:
         return {
             "max_message_size_bytes": int(self._runtime.settings.max_message_size_bytes),
             "max_recipients_per_message": int(self._runtime.settings.max_recipients_per_message),
+            "smtp_idle_timeout_seconds": int(self._runtime.settings.smtp_idle_timeout_seconds),
+            "smtp_max_concurrent_connections": int(self._runtime.settings.smtp_max_concurrent_connections),
+            "smtp_connection_rate_limit_count": int(self._runtime.settings.smtp_connection_rate_limit_count),
+            "smtp_connection_rate_limit_window_seconds": int(
+                self._runtime.settings.smtp_connection_rate_limit_window_seconds
+            ),
+            "disk_warning_threshold_percent": int(self._runtime.settings.disk_warning_threshold_percent),
         }
 
     def _load_persisted_settings(self) -> dict[str, Any]:
@@ -85,7 +101,9 @@ class SettingsService:
         normalized: dict[str, str] = {}
         for key, value in payload.items():
             key_text = str(key)
-            if key_text in self.INTEGER_SETTINGS:
+            if key_text in self.NON_NEGATIVE_INTEGER_SETTINGS:
+                normalized[key_text] = str(self._coerce_non_negative_int(key_text, value))
+            elif key_text in self.INTEGER_SETTINGS:
                 normalized[key_text] = str(self._coerce_positive_int(key_text, value))
             else:
                 normalized[key_text] = self._coerce_text_value(value)
@@ -107,7 +125,22 @@ class SettingsService:
             raise ValueError(f"invalid {key}") from exc
         if normalized < 1:
             raise ValueError(f"invalid {key}")
+        if key == "disk_warning_threshold_percent" and normalized > 100:
+            raise ValueError(f"invalid {key}")
         if isinstance(value, float) and normalized != value:
+            raise ValueError(f"invalid {key}")
+        return normalized
+
+    def _coerce_non_negative_int(self, key: str, value: Any) -> int:
+        if isinstance(value, bool):
+            raise ValueError(f"invalid {key}")
+        if isinstance(value, float) and not value.is_integer():
+            raise ValueError(f"invalid {key}")
+        try:
+            normalized = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid {key}") from exc
+        if normalized < 0:
             raise ValueError(f"invalid {key}")
         return normalized
 
@@ -119,13 +152,16 @@ class SettingsService:
         return str(value)
 
     def _deserialize_value(self, key: str, value: Any) -> Any:
+        if key in self.NON_NEGATIVE_INTEGER_SETTINGS:
+            try:
+                return self._coerce_non_negative_int(key, value)
+            except ValueError:
+                return int(self._base_settings()[key])
         if key in self.INTEGER_SETTINGS:
             try:
                 return self._coerce_positive_int(key, value)
             except ValueError:
-                if key == "max_recipients_per_message":
-                    return int(self._runtime.settings.max_recipients_per_message)
-                return int(self._runtime.settings.max_message_size_bytes)
+                return int(self._base_settings()[key])
         return value
 
 

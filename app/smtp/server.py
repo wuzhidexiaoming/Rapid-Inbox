@@ -11,6 +11,7 @@ class SMTPServer:
             RapidInboxHandler(runtime),
             hostname=runtime.settings.smtp_host,
             port=runtime.settings.smtp_port,
+            timeout=runtime.settings.smtp_idle_timeout_seconds,
         )
 
     def start(self) -> None:

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS admins (
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'superadmin' CHECK (role IN ('superadmin', 'operator', 'viewer')),
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1)),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     last_login_at TEXT,

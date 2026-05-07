@@ -1,0 +1,79 @@
+{% extends "admin/base.html" %}
+{% from "admin/_pagination.html" import pagination_nav %}
+
+{% block head %}
+<style>
+  .custom-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="section-title">
+    <div>
+      <p class="eyebrow">邮箱详情</p>
+      <h2>{{ mailbox.address_canonical }}</h2>
+      <p class="section-copy">域名：{{ mailbox.root_domain_ascii }}，累计 {{ mailbox.message_count }} 封当前有效投递。</p>
+    </div>
+    <a class="button button--ghost" href="/admin/mailboxes">返回邮箱列表</a>
+  </div>
+
+  <form method="post" action="/admin/mailboxes/{{ mailbox.id }}" class="button-row" style="justify-content: flex-start; margin-bottom: 1rem;">
+    <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+    <input type="hidden" name="offset" value="{{ pagination.offset }}" />
+    <label class="custom-checkbox-label">
+      <input type="hidden" name="public_enabled" value="0" />
+      <input type="checkbox" name="public_enabled" value="1" {% if mailbox.public_enabled %}checked{% endif %} />
+      允许公开访问
+    </label>
+    <label class="custom-checkbox-label">
+      <input type="hidden" name="is_hidden" value="0" />
+      <input type="checkbox" name="is_hidden" value="1" {% if mailbox.is_hidden %}checked{% endif %} />
+      前台隐藏
+    </label>
+    <button class="button button--primary" type="submit">保存</button>
+  </form>
+
+  {% if deliveries %}
+    <form method="post" action="/admin/mailboxes/{{ mailbox.id }}/delete-deliveries">
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>投递</th>
+              <th>主题 / 发件人</th>
+              <th>状态</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for delivery in deliveries %}
+              <tr>
+                <td><input type="checkbox" name="delivery_ids" value="{{ delivery.delivery_id }}" {% if delivery.status != "active" %}disabled{% endif %} /></td>
+                <td><code>{{ delivery.delivery_id }}</code></td>
+                <td>
+                  <a href="/admin/messages/{{ delivery.message_id }}">{{ delivery.subject or "（无主题）" }}</a>
+                  <div class="muted">{{ delivery.from_addr or "未知发件人" }}</div>
+                </td>
+                <td>{{ delivery.status }} / {{ cn_parse_status(delivery.parse_status) }}</td>
+                <td>{{ cn_datetime(delivery.delivered_at) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="button-row" style="justify-content: space-between; margin-top: 1rem;">
+        <button class="button button--danger" type="submit" onclick="return confirm('确认软删除选中的投递？未选择时会删除该邮箱全部有效投递。')">删除选中投递</button>
+        {{ pagination_nav(pagination) }}
+      </div>
+    </form>
+  {% else %}
+    <div class="empty-state">该邮箱暂无投递记录。</div>
+  {% endif %}
+</section>
+{% endblock %}

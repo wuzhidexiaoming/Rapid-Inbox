@@ -19,6 +19,11 @@ class Settings:
     smtp_port: int = 25
     max_message_size_bytes: int = 52_428_800
     max_recipients_per_message: int = 20
+    smtp_idle_timeout_seconds: int = 300
+    smtp_max_concurrent_connections: int = 100
+    smtp_connection_rate_limit_count: int = 20
+    smtp_connection_rate_limit_window_seconds: int = 60
+    disk_warning_threshold_percent: int = 85
     admin_token: str = "dev-admin-token"
     public_api_key: str = "public-demo-key"
 
@@ -56,7 +61,7 @@ class Settings:
             self.manifests_dir,
             self.tmp_dir,
         ):
-                path.mkdir(parents=True, exist_ok=True)
+            path.mkdir(parents=True, exist_ok=True)
 
 
 def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
@@ -131,6 +136,15 @@ def default_settings(base_dir: Path) -> Settings:
         smtp_port=_coerce_int(merged, "SMTP_PORT", 25),
         max_message_size_bytes=_coerce_int(merged, "MAX_MESSAGE_SIZE_BYTES", 52_428_800),
         max_recipients_per_message=_coerce_int(merged, "MAX_RECIPIENTS_PER_MESSAGE", 20),
+        smtp_idle_timeout_seconds=_coerce_int(merged, "SMTP_IDLE_TIMEOUT_SECONDS", 300),
+        smtp_max_concurrent_connections=_coerce_int(merged, "SMTP_MAX_CONCURRENT_CONNECTIONS", 100),
+        smtp_connection_rate_limit_count=_coerce_int(merged, "SMTP_CONNECTION_RATE_LIMIT_COUNT", 20),
+        smtp_connection_rate_limit_window_seconds=_coerce_int(
+            merged,
+            "SMTP_CONNECTION_RATE_LIMIT_WINDOW_SECONDS",
+            60,
+        ),
+        disk_warning_threshold_percent=_coerce_int(merged, "DISK_WARNING_THRESHOLD_PERCENT", 85),
         admin_token=_coerce_str(merged, "ADMIN_TOKEN", "dev-admin-token"),
         public_api_key=_coerce_str(merged, "PUBLIC_API_KEY", "public-demo-key"),
     )

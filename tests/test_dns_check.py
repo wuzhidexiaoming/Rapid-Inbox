@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 
-import app.services.dns_check as dns_check_module
 from app.services.dns_check import DnsCheckService
 
 
@@ -27,23 +26,19 @@ async def test_dns_check_service_returns_sorted_mx_records(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_dns_check_service_uses_to_thread(monkeypatch) -> None:
-    calls: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
-
-    async def fake_to_thread(func, /, *args, **kwargs):
-        calls.append((func, args, kwargs))
-        return func(*args, **kwargs)
+async def test_dns_check_service_resolves_mx_records(monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
 
     def fake_resolve(root_domain: str, record_type: str):
+        calls.append((root_domain, record_type))
         assert root_domain == "adb.com"
         assert record_type == "MX"
         return [SimpleNamespace(exchange="mx1.example.")]
 
-    monkeypatch.setattr(dns_check_module.asyncio, "to_thread", fake_to_thread)
-    monkeypatch.setattr(dns_check_module.dns.resolver, "resolve", fake_resolve)
+    monkeypatch.setattr("app.services.dns_check.dns.resolver.resolve", fake_resolve)
 
     result = await DnsCheckService().run_dns_check("adb.com")
 
-    assert calls
+    assert calls == [("adb.com", "MX")]
     assert result["status"] == "ok"
     assert result["mx_records"] == ["mx1.example"]

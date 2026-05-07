@@ -69,6 +69,23 @@
     font-size: 1.1rem;
     color: var(--text);
   }
+  .form-grid {
+    display: grid;
+    gap: 1rem;
+  }
+  .two-up {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.75rem;
+  }
+  .inline-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
 </style>
 {% endblock %}
 
@@ -87,6 +104,16 @@
       </span>
     </div>
   </div>
+
+  {% if error %}
+    <div class="notice">{{ error }}</div>
+  {% endif %}
+  {% if updated %}
+    <div class="notice">域名配置已更新。</div>
+  {% endif %}
+  {% if dns_checked %}
+    <div class="notice">DNS 检查已完成并写入最新状态。</div>
+  {% endif %}
 
   <div class="details-grid">
     <!-- Card 1: 访问控制 -->
@@ -161,6 +188,75 @@
     </div>
   </div>
 
+  <div class="card" data-aos="fade-up" data-aos-delay="350">
+    <h3 class="section-heading">编辑域名配置</h3>
+    <form method="post" action="/admin/domains/{{ domain.id }}">
+      <div class="form-grid two-up">
+        <label>
+          <span class="info-label">根域名</span>
+          <input type="text" name="root_domain" value="{{ form.root_domain }}" required />
+        </label>
+        <label>
+          <span class="info-label">最大邮件大小（字节）</span>
+          <input type="number" min="1" step="1" name="max_message_size_bytes" value="{{ form.max_message_size_bytes }}" required />
+        </label>
+        <label>
+          <span class="info-label">加号寻址策略</span>
+          <select name="plus_addressing_mode">
+            <option value="keep" {% if form.plus_addressing_mode == "keep" %}selected{% endif %}>保留原样</option>
+            <option value="strip" {% if form.plus_addressing_mode == "strip" %}selected{% endif %}>去除加号标签</option>
+          </select>
+        </label>
+        <label>
+          <span class="info-label">保留天数</span>
+          <input type="number" min="1" step="1" name="retention_days" value="{{ form.retention_days }}" placeholder="可选" />
+        </label>
+      </div>
+      <div class="checkbox-grid" style="margin-top: 1rem;">
+        <label class="inline-check"><input type="hidden" name="accept_exact" value="0" /><input type="checkbox" name="accept_exact" value="1" {% if form.accept_exact %}checked{% endif %} />接收根域邮箱</label>
+        <label class="inline-check"><input type="hidden" name="accept_subdomains" value="0" /><input type="checkbox" name="accept_subdomains" value="1" {% if form.accept_subdomains %}checked{% endif %} />接收子域邮箱</label>
+        <label class="inline-check"><input type="hidden" name="public_web_enabled" value="0" /><input type="checkbox" name="public_web_enabled" value="1" {% if form.public_web_enabled %}checked{% endif %} />公开 Web</label>
+        <label class="inline-check"><input type="hidden" name="public_api_enabled" value="0" /><input type="checkbox" name="public_api_enabled" value="1" {% if form.public_api_enabled %}checked{% endif %} />公开 API</label>
+        <label class="inline-check"><input type="hidden" name="local_part_case_sensitive" value="0" /><input type="checkbox" name="local_part_case_sensitive" value="1" {% if form.local_part_case_sensitive %}checked{% endif %} />本地部分区分大小写</label>
+        <label class="inline-check"><input type="hidden" name="is_active" value="0" /><input type="checkbox" name="is_active" value="1" {% if form.is_active %}checked{% endif %} />启用域名</label>
+      </div>
+      <label style="display: block; margin-top: 1rem;">
+        <span class="info-label">备注</span>
+        <textarea name="notes">{{ form.notes }}</textarea>
+      </label>
+      <div class="button-row" style="justify-content: flex-end; margin-top: 1rem;">
+        <button class="button button--primary" type="submit">保存域名</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card" data-aos="fade-up" data-aos-delay="360">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
+      <h3 style="margin: 0;">DNS 建议与检查</h3>
+      <form method="post" action="/admin/domains/{{ domain.id }}/dns-check">
+        <button class="button button--ghost" type="submit">执行 DNS 检查</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>名称</th><th>类型</th><th>建议值</th><th>用途</th></tr></thead>
+        <tbody>
+          {% for record in domain.dns_recommendations %}
+            <tr>
+              <td>{{ record.name }}</td>
+              <td>{{ record.type }}</td>
+              <td><code>{{ record.value }}</code></td>
+              <td>{{ record.purpose }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if domain.dns_last_checked_at %}
+      <p class="muted">最近检查：{{ cn_datetime(domain.dns_last_checked_at) }}，状态：{{ cn_dns_status(domain.dns_status) }}</p>
+    {% endif %}
+  </div>
+
   <div class="card" data-aos="fade-up" data-aos-delay="400">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
       <h3 style="margin: 0;">关联邮箱列表</h3>
@@ -206,6 +302,20 @@
         <p>该域名下暂无任何邮箱记录</p>
       </div>
     {% endif %}
+  </div>
+
+  <div class="card" data-aos="fade-up" data-aos-delay="450">
+    <h3 class="section-heading">删除域名</h3>
+    <p class="muted">只有没有关联邮箱、投递记录和 API 授权的域名可以直接删除。已有数据的域名建议先停用。</p>
+    <form method="post" action="/admin/domains/{{ domain.id }}/delete" onsubmit="return confirm('确认删除该域名？')">
+      <label class="inline-check" style="max-width: 320px;">
+        <input type="checkbox" name="confirm" value="delete-domain" required />
+        确认删除该域名
+      </label>
+      <div class="button-row" style="margin-top: 1rem;">
+        <button class="button button--danger" type="submit">删除域名</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}

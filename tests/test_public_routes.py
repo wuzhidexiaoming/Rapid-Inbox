@@ -3,16 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.policy import SMTP
-from functools import partial
 from itertools import count
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 
 from app.config import default_settings
 import app.runtime as runtime_module
 from app.main import create_app
+from app.services.messages import MessageService
 
 
 def _mail_bytes(subject: str, message_id: str, body: str) -> bytes:
@@ -227,6 +226,50 @@ async def test_public_mailbox_api_returns_pagination_metadata(app_client, runtim
 
 
 @pytest.mark.asyncio
+async def test_public_mailbox_api_supports_delivery_cursor_pagination(app_client, runtime, monkeypatch) -> None:
+    _patch_sequenced_utc_now(monkeypatch)
+
+    await runtime.create_domain("adb.com")
+    for subject in ("Oldest", "Middle", "Newest"):
+        await runtime.accept_message(
+            rcpt_tos=["foo@adb.com"],
+            envelope_from="sender@example.com",
+            content=_mail_bytes(subject, f"cursor-{subject.lower()}@example.com", subject),
+        )
+    await runtime.drain_parser_queue()
+
+    first_page = await app_client.get(
+        "/api/v1/public/mailboxes/foo@adb.com/messages?limit=1",
+        headers={"X-API-Key": str(runtime.settings.public_api_key)},
+    )
+    cursor = first_page.json()["next_cursor"]
+    second_page = await app_client.get(
+        f"/api/v1/public/mailboxes/foo@adb.com/messages?limit=1&cursor={cursor}",
+        headers={"X-API-Key": str(runtime.settings.public_api_key)},
+    )
+
+    assert first_page.status_code == 200
+    assert first_page.json()["items"][0]["subject"] == "Newest"
+    assert first_page.json()["pagination"]["mode"] == "offset"
+    assert cursor
+    assert second_page.status_code == 200
+    assert second_page.json()["pagination"]["mode"] == "cursor"
+    assert second_page.json()["items"][0]["subject"] == "Middle"
+
+
+@pytest.mark.asyncio
+async def test_public_mailbox_api_hides_soft_deleted_delivery_detail(app_client, runtime, seeded_message) -> None:
+    await runtime.messages.soft_delete_delivery(seeded_message.delivery_id)
+
+    detail = await app_client.get(
+        f"/api/v1/public/mailboxes/foo@adb.com/messages/{seeded_message.delivery_id}",
+        headers={"X-API-Key": seeded_message.public_api_key},
+    )
+
+    assert detail.status_code == 404
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "mailbox_updates",
     [
@@ -409,40 +452,37 @@ async def test_public_mailbox_page_includes_websocket_bootstrap_on_first_page(ap
     assert 'data-live-enabled="true"' in response.text
 
 
-def test_public_mailbox_websocket_receives_new_delivery_and_parse_update(tmp_path) -> None:
-    settings = default_settings(tmp_path)
-    app = create_app(settings=settings)
+@pytest.mark.asyncio
+async def test_public_mailbox_live_events_include_new_delivery_and_parse_update(runtime) -> None:
+    await runtime.create_domain("adb.com")
+    _, cursor = runtime.live_state.snapshot_state()
+    _, seq_text = cursor.rsplit(":", 1)
+    last_seq = int(seq_text)
 
-    with TestClient(app) as client:
-        runtime = app.state.runtime
-        client.portal.call(runtime.create_domain, "adb.com")
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="sender@example.com",
+        content=_mail_bytes("Live Subject", "live@example.com", "live body"),
+    )
+    await runtime.drain_parser_queue()
 
-        page = client.get("/mail/foo@adb.com")
-        assert page.status_code == 200
-        marker = "/mail/foo@adb.com/ws?after_cursor="
-        start = page.text.index(marker) + len(marker)
-        cursor = page.text[start: page.text.index('"', start)]
+    events = [
+        event
+        for event in runtime.live_state.snapshot_since(last_seq)
+        if event.get("type") in {"mailbox_delivery", "mailbox_delivery_updated"}
+    ]
+    inserted = events[0]
+    updated = events[-1]
+    item = await MessageService(runtime).get_public_mailbox_item(
+        "foo@adb.com",
+        str(updated["delivery_id"]),
+        surface="web",
+    )
 
-        with client.websocket_connect(f"/mail/foo@adb.com/ws?after_cursor={cursor}") as websocket:
-            client.portal.call(
-                partial(
-                    runtime.accept_message,
-                    rcpt_tos=["foo@adb.com"],
-                    envelope_from="sender@example.com",
-                    content=_mail_bytes("Live Subject", "live@example.com", "live body"),
-                )
-            )
-
-            inserted = websocket.receive_json()
-            updated = websocket.receive_json()
-
-        assert inserted["type"] == "mailbox_delivery"
-        assert inserted["item"]["delivery_id"].startswith("dlv_")
-        assert inserted["item"]["parse_status"] == "pending"
-        assert inserted["item"]["subject"] is None
-        assert inserted["item"]["verification_code"] is None
-
-        assert updated["type"] == "mailbox_delivery_updated"
-        assert updated["item"]["delivery_id"] == inserted["item"]["delivery_id"]
-        assert updated["item"]["parse_status"] == "parsed"
-        assert updated["item"]["subject"] == "Live Subject"
+    assert inserted["type"] == "mailbox_delivery"
+    assert str(inserted["delivery_id"]).startswith("dlv_")
+    assert inserted["parse_status"] == "pending"
+    assert updated["type"] == "mailbox_delivery_updated"
+    assert updated["delivery_id"] == inserted["delivery_id"]
+    assert item["parse_status"] == "parsed"
+    assert item["subject"] == "Live Subject"

@@ -5,7 +5,7 @@ import sqlite3
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 
 from app.auth.permissions import PermissionContext
 from app.http.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, build_pagination_context
@@ -107,7 +107,7 @@ def _nullable_text(value: Any) -> str | None:
     return text or None
 
 
-def require_admin_key(
+async def require_admin_key(
     request: Request,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> PermissionContext:
@@ -191,13 +191,15 @@ async def require_admin_live_access(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> PermissionContext:
     if x_api_key is not None:
-        admin = require_admin_key(request, x_api_key)
+        admin = await require_admin_key(request, x_api_key)
         require_admin_scope(admin, "live.read")
         return admin
 
     admin_session = await _current_admin_session(request)
     if admin_session is None:
         raise HTTPException(status_code=404, detail="live page not found")
+    if admin_session.get("must_change_password"):
+        raise HTTPException(status_code=403, detail="password change required")
     return _session_permission_context(admin_session)
 
 
@@ -210,6 +212,8 @@ async def live_page(
     admin = await _current_admin_session(request)
     if admin is None:
         raise HTTPException(status_code=404, detail="live page not found")
+    if admin.get("must_change_password"):
+        return RedirectResponse("/admin/settings?force_password_change=1", status_code=status.HTTP_303_SEE_OTHER)
 
     runtime = request.app.state.runtime
     live_events, live_cursor = runtime.live_state.snapshot_state()
@@ -340,12 +344,117 @@ async def create_domain(
             public_api_enabled=payload.get("public_api_enabled", True),
             plus_addressing_mode=payload.get("plus_addressing_mode", "keep"),
             local_part_case_sensitive=payload.get("local_part_case_sensitive", False),
+            is_active=payload.get("is_active", True),
             max_message_size_bytes=payload.get("max_message_size_bytes", settings["max_message_size_bytes"]),
         )
     except (ValueError, sqlite3.IntegrityError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await _write_audit_best_effort(request, admin, "domains.create", "domain", str(created["id"]), "success")
     return created
+
+
+@router.get("/api/v1/admin/domains/{domain_id}")
+async def get_domain(
+    domain_id: int,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "domains.read")
+    await _record_admin_key_usage(request, admin)
+    try:
+        return request.app.state.runtime.domains.get_domain(domain_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/api/v1/admin/domains/{domain_id}")
+async def update_domain(
+    domain_id: int,
+    payload: dict[str, Any],
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "domains.write")
+    await _record_admin_key_usage(request, admin)
+    try:
+        updated = await request.app.state.runtime.domains.update_domain(domain_id, payload)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await _write_audit_best_effort(request, admin, "domains.update", "domain", str(domain_id), "success")
+    return updated
+
+
+@router.delete("/api/v1/admin/domains/{domain_id}")
+async def delete_domain(
+    domain_id: int,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "domains.write")
+    await _record_admin_key_usage(request, admin)
+    try:
+        deleted = await request.app.state.runtime.domains.delete_domain(domain_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="domain has dependent mailboxes or grants") from exc
+    await _write_audit_best_effort(request, admin, "domains.delete", "domain", str(domain_id), "success")
+    return {"deleted": True, "domain": deleted}
+
+
+@router.get("/api/v1/admin/mailboxes")
+async def list_mailboxes(
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+    q: str | None = Query(default=None),
+    domain_id: int | None = Query(default=None),
+    public_enabled: bool | None = Query(default=None),
+    is_hidden: bool | None = Query(default=None),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "mailboxes.read")
+    await _record_admin_key_usage(request, admin)
+    service = request.app.state.runtime.mailboxes
+    result = service.list_mailboxes(
+        limit=limit,
+        offset=offset,
+        query=q,
+        domain_id=domain_id,
+        public_enabled=public_enabled,
+        is_hidden=is_hidden,
+    )
+    result["total_count"] = service.count_mailboxes(
+        query=q,
+        domain_id=domain_id,
+        public_enabled=public_enabled,
+        is_hidden=is_hidden,
+    )
+    return result
+
+
+@router.get("/api/v1/admin/mailboxes/{mailbox_id}")
+async def get_mailbox(
+    mailbox_id: int,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "mailboxes.read")
+    await _record_admin_key_usage(request, admin)
+    try:
+        mailbox = request.app.state.runtime.mailboxes.get_mailbox(mailbox_id)
+        deliveries = request.app.state.runtime.mailboxes.list_mailbox_deliveries(
+            mailbox_id,
+            limit=limit,
+            offset=offset,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {**mailbox, "deliveries": deliveries["items"], "delivery_count": deliveries["total_count"]}
 
 
 @router.patch("/api/v1/admin/mailboxes/{mailbox_id}")
@@ -377,6 +486,74 @@ async def update_mailbox(
     return updated
 
 
+@router.delete("/api/v1/admin/mailboxes/{mailbox_id}")
+async def delete_mailbox_deliveries(
+    mailbox_id: int,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "mailboxes.write")
+    await _record_admin_key_usage(request, admin)
+    try:
+        result = await request.app.state.runtime.mailboxes.soft_delete_mailbox_deliveries(mailbox_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await _write_audit_best_effort(
+        request,
+        admin,
+        "deliveries.bulk_delete",
+        "mailbox",
+        str(mailbox_id),
+        "success",
+    )
+    return result
+
+
+@router.get("/api/v1/admin/messages")
+async def list_messages(
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+    q: str | None = Query(default=None),
+    parse_status: str | None = Query(default=None),
+    mailbox_id: int | None = Query(default=None),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "messages.read")
+    await _record_admin_key_usage(request, admin)
+    try:
+        return request.app.state.runtime.messages.list_messages(
+            limit=limit,
+            offset=offset,
+            query=q,
+            parse_status=parse_status,
+            mailbox_id=mailbox_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/admin/messages/bulk-delete")
+async def bulk_delete_deliveries(
+    payload: dict[str, Any],
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "messages.write")
+    await _record_admin_key_usage(request, admin)
+    delivery_ids = _coerce_text_list(payload.get("delivery_ids"))
+    result = await request.app.state.runtime.messages.soft_delete_deliveries(delivery_ids)
+    await _write_audit_best_effort(
+        request,
+        admin,
+        "deliveries.bulk_delete",
+        "delivery",
+        None,
+        "success",
+    )
+    return result
+
+
 @router.post("/api/v1/admin/messages/{message_id}/reparse", status_code=status.HTTP_202_ACCEPTED)
 async def reparse_message(
     message_id: str,
@@ -393,16 +570,169 @@ async def reparse_message(
     return {"queued": True, "message_id": message_id}
 
 
+@router.get("/api/v1/admin/messages/{message_id}")
+async def get_message(
+    message_id: str,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "messages.read")
+    await _record_admin_key_usage(request, admin)
+    try:
+        return request.app.state.runtime.messages.get_admin_message_detail(message_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/api/v1/admin/messages/{message_id}/raw")
+async def download_message_raw(
+    message_id: str,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> Response:
+    require_admin_scope(admin, "messages.read")
+    await _record_admin_key_usage(request, admin)
+    try:
+        raw = request.app.state.runtime.messages.get_admin_raw_message(message_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(raw, media_type="message/rfc822")
+
+
+@router.get("/api/v1/admin/messages/{message_id}/attachments/{attachment_id}")
+async def download_message_attachment(
+    message_id: str,
+    attachment_id: str,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> Response:
+    require_admin_scope(admin, "messages.read")
+    await _record_admin_key_usage(request, admin)
+    try:
+        attachment = request.app.state.runtime.messages.get_admin_attachment(message_id, attachment_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    safe_filename = attachment.get("safe_filename") or "attachment.bin"
+    return Response(
+        attachment["content"],
+        media_type=attachment.get("content_type") or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.delete("/api/v1/admin/messages/{message_id}")
+async def delete_message_deliveries(
+    message_id: str,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "messages.write")
+    await _record_admin_key_usage(request, admin)
+    try:
+        detail = request.app.state.runtime.messages.get_admin_message_detail(message_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    delivery_ids = [str(item["delivery_id"]) for item in detail["deliveries"]]
+    result = await request.app.state.runtime.messages.soft_delete_deliveries(delivery_ids)
+    await _write_audit_best_effort(request, admin, "deliveries.bulk_delete", "message", message_id, "success")
+    return result
+
+
+@router.delete("/api/v1/admin/messages/{message_id}/deliveries/{delivery_id}")
+async def delete_message_delivery(
+    message_id: str,
+    delivery_id: str,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "messages.write")
+    await _record_admin_key_usage(request, admin)
+    try:
+        detail = request.app.state.runtime.messages.get_admin_message_detail(message_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if delivery_id not in {str(item["delivery_id"]) for item in detail["deliveries"]}:
+        raise HTTPException(status_code=404, detail="delivery not found")
+    result = await request.app.state.runtime.messages.soft_delete_delivery(delivery_id)
+    await _write_audit_best_effort(request, admin, "deliveries.delete", "delivery", delivery_id, "success")
+    return result
+
+
+@router.get("/api/v1/admin/smtp-sessions")
+async def list_smtp_sessions(
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "smtp.read")
+    await _record_admin_key_usage(request, admin)
+    runtime = request.app.state.runtime
+    return {
+        "items": recent_smtp_sessions(runtime, limit=limit, offset=offset),
+        "total_count": count_smtp_sessions(runtime),
+    }
+
+
+@router.get("/api/v1/admin/smtp-sessions/{session_id}")
+async def get_smtp_session(
+    session_id: str,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "smtp.read")
+    await _record_admin_key_usage(request, admin)
+    runtime = request.app.state.runtime
+    with sqlite3.connect(runtime.settings.database_path, check_same_thread=False) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            "SELECT * FROM smtp_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="smtp session not found")
+        events = connection.execute(
+            """
+            SELECT id, seq, event_type, ts, payload_json
+            FROM smtp_events
+            WHERE session_id = ?
+            ORDER BY seq ASC
+            """,
+            (session_id,),
+        ).fetchall()
+    return {
+        **dict(row),
+        "tls_used": bool(row["tls_used"]),
+        "events": [dict(event) for event in events],
+    }
+
+
 @router.get("/api/v1/admin/audit-logs")
 async def list_audit_logs(
     request: Request,
     admin: PermissionContext = Depends(require_admin_key),
     limit: int = Query(default=100, ge=0, le=1000),
     offset: int = Query(default=0, ge=0, le=1_000_000),
+    actor: str | None = Query(default=None),
+    action: str | None = Query(default=None),
+    resource: str | None = Query(default=None),
+    start_time: str | None = Query(default=None),
+    end_time: str | None = Query(default=None),
 ) -> dict:
     require_admin_scope(admin, "audit.read")
     await _record_admin_key_usage(request, admin)
-    return request.app.state.runtime.audit.list_logs(limit=limit, offset=offset)
+    return request.app.state.runtime.audit.list_logs(
+        limit=limit,
+        offset=offset,
+        actor=actor,
+        action=action,
+        resource=resource,
+        start_time=start_time,
+        end_time=end_time,
+    )
 
 
 @router.get("/api/v1/admin/settings")
@@ -429,6 +759,18 @@ async def update_settings(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await _write_audit_best_effort(request, admin, "settings.update", "system_settings", None, "success")
     return updated
+
+
+@router.get("/api/v1/admin/api-keys")
+async def list_api_keys(
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "api_keys.read")
+    await _record_admin_key_usage(request, admin)
+    return request.app.state.runtime.api_keys.list_keys(limit=limit, offset=offset)
 
 
 @router.post("/api/v1/admin/api-keys", status_code=status.HTTP_201_CREATED)
@@ -467,6 +809,20 @@ async def create_api_key(
 
     await _write_audit_best_effort(request, admin, "api_keys.create", "api_key", str(created["id"]), "success")
     return created
+
+
+@router.get("/api/v1/admin/api-keys/{api_key_id}")
+async def get_api_key(
+    api_key_id: int,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "api_keys.read")
+    await _record_admin_key_usage(request, admin)
+    try:
+        return request.app.state.runtime.api_keys.get_key(api_key_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.patch("/api/v1/admin/api-keys/{api_key_id}")
@@ -526,6 +882,26 @@ async def update_api_key(
 
     await _write_audit_best_effort(request, admin, "api_keys.update", "api_key", str(api_key_id), "success")
     return updated
+
+
+@router.post("/api/v1/admin/api-keys/{api_key_id}/rotate")
+async def rotate_api_key(
+    api_key_id: int,
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "api_keys.write")
+    await _record_admin_key_usage(request, admin)
+
+    try:
+        rotated = await request.app.state.runtime.api_keys.rotate_key(api_key_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="api key rotation conflict") from exc
+
+    await _write_audit_best_effort(request, admin, "api_keys.rotate", "api_key", str(api_key_id), "success")
+    return rotated
 
 
 @router.post("/api/v1/admin/api-keys/{api_key_id}/revoke")

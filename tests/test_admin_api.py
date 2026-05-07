@@ -748,7 +748,15 @@ async def test_admin_api_settings_allowlist_rejects_unsupported_keys_and_filters
 
     assert rejected.status_code == 422
     assert "admin_token" not in listed.json()
-    assert set(listed.json()) == {"max_message_size_bytes", "max_recipients_per_message"}
+    assert set(listed.json()) == {
+        "max_message_size_bytes",
+        "max_recipients_per_message",
+        "smtp_idle_timeout_seconds",
+        "smtp_max_concurrent_connections",
+        "smtp_connection_rate_limit_count",
+        "smtp_connection_rate_limit_window_seconds",
+        "disk_warning_threshold_percent",
+    }
 
 
 @pytest.mark.asyncio
@@ -759,3 +767,146 @@ async def test_admin_api_rejects_fractional_settings_values(admin_client) -> Non
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_admin_api_allows_zero_to_disable_smtp_connection_limits(admin_client, runtime) -> None:
+    response = await admin_client.patch(
+        "/api/v1/admin/settings",
+        json={
+            "smtp_max_concurrent_connections": 0,
+            "smtp_connection_rate_limit_count": 0,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["smtp_max_concurrent_connections"] == 0
+    assert response.json()["smtp_connection_rate_limit_count"] == 0
+    assert runtime.settings.smtp_max_concurrent_connections == 0
+    assert runtime.settings.smtp_connection_rate_limit_count == 0
+
+
+@pytest.mark.asyncio
+async def test_admin_api_mirrors_domain_mailbox_message_session_and_key_rotate(
+    admin_client,
+    runtime,
+    sample_email_bytes: bytes,
+) -> None:
+    created = await admin_client.post(
+        "/api/v1/admin/domains",
+        json={"root_domain": "mirror.test", "accept_subdomains": True},
+    )
+    domain_id = created.json()["id"]
+    patched = await admin_client.patch(
+        f"/api/v1/admin/domains/{domain_id}",
+        json={"public_api_enabled": False, "accept_exact": False},
+    )
+    domain_detail = await admin_client.get(f"/api/v1/admin/domains/{domain_id}")
+
+    assert created.status_code == 201
+    assert patched.status_code == 200
+    assert patched.json()["public_api_enabled"] is False
+    assert patched.json()["accept_exact"] is False
+    assert domain_detail.status_code == 200
+    assert domain_detail.json()["dns_recommendations"]
+
+    await admin_client.patch(
+        f"/api/v1/admin/domains/{domain_id}",
+        json={"public_api_enabled": True, "accept_exact": True},
+    )
+    await runtime.ensure_smtp_session(
+        "smtp_admin_mirror",
+        SimpleNamespace(peer=("127.0.0.1", 2525), host_name="pytest", ssl=None),
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@mirror.test"],
+        envelope_from="sender@example.com",
+        content=sample_email_bytes,
+        smtp_session_id="smtp_admin_mirror",
+    )
+    await runtime.drain_parser_queue()
+
+    mailboxes = await admin_client.get("/api/v1/admin/mailboxes?q=foo@mirror.test")
+    mailbox_id = mailboxes.json()["items"][0]["id"]
+    mailbox_detail = await admin_client.get(f"/api/v1/admin/mailboxes/{mailbox_id}")
+    messages = await admin_client.get(f"/api/v1/admin/messages?mailbox_id={mailbox_id}")
+    message_id = messages.json()["items"][0]["id"]
+    message_detail = await admin_client.get(f"/api/v1/admin/messages/{message_id}")
+    raw = await admin_client.get(f"/api/v1/admin/messages/{message_id}/raw")
+    session_list = await admin_client.get("/api/v1/admin/smtp-sessions")
+    session_detail = await admin_client.get("/api/v1/admin/smtp-sessions/smtp_admin_mirror")
+    delivery_id = message_detail.json()["deliveries"][0]["delivery_id"]
+    deleted = await admin_client.delete(f"/api/v1/admin/messages/{message_id}/deliveries/{delivery_id}")
+    audit = await admin_client.get("/api/v1/admin/audit-logs?action=deliveries.delete")
+
+    assert mailboxes.status_code == 200
+    assert mailbox_detail.status_code == 200
+    assert mailbox_detail.json()["deliveries"][0]["delivery_id"] == delivery_id
+    assert messages.status_code == 200
+    assert message_detail.status_code == 200
+    assert message_detail.json()["subject"] == "Hello Rapid Inbox"
+    assert raw.status_code == 200
+    assert raw.headers["content-type"] == "message/rfc822"
+    assert session_list.status_code == 200
+    assert session_detail.status_code == 200
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] == 1
+    assert audit.status_code == 200
+    assert audit.json()["items"][0]["action"] == "deliveries.delete"
+
+    key = await runtime.api_keys.create_key(
+        name="rotate-me",
+        kind="admin",
+        scopes=["domains.read"],
+        domain_ids=[],
+        mailbox_patterns=[],
+    )
+    key_detail = await admin_client.get(f"/api/v1/admin/api-keys/{key['id']}")
+    rotated = await admin_client.post(f"/api/v1/admin/api-keys/{key['id']}/rotate")
+    old_response = await admin_client.get(
+        "/api/v1/admin/domains",
+        headers={"X-API-Key": key["plain_text"]},
+    )
+    new_response = await admin_client.get(
+        "/api/v1/admin/domains",
+        headers={"X-API-Key": rotated.json()["plain_text"]},
+    )
+
+    assert key_detail.status_code == 200
+    assert "plain_text" not in key_detail.json()
+    assert rotated.status_code == 200
+    assert rotated.json()["plain_text"] != key["plain_text"]
+    assert old_response.status_code == 401
+    assert new_response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_smtp_runtime_protection_settings_apply_to_handler(
+    admin_client,
+    runtime,
+    sample_email_bytes: bytes,
+) -> None:
+    await runtime.create_domain("adb.com")
+    settings_response = await admin_client.patch(
+        "/api/v1/admin/settings",
+        json={
+            "smtp_max_concurrent_connections": 1,
+            "smtp_connection_rate_limit_count": 1,
+            "smtp_connection_rate_limit_window_seconds": 60,
+            "smtp_idle_timeout_seconds": 120,
+            "disk_warning_threshold_percent": 90,
+        },
+    )
+    handler = RapidInboxHandler(runtime)
+    first_session = SimpleNamespace(peer=("127.0.0.1", 2525), host_name="pytest", ssl=None)
+    first_envelope = SimpleNamespace(rcpt_tos=[], mail_from="sender@example.com", content=sample_email_bytes)
+    second_session = SimpleNamespace(peer=("127.0.0.2", 2526), host_name="pytest", ssl=None)
+    second_envelope = SimpleNamespace(rcpt_tos=[], mail_from="sender@example.com", content=sample_email_bytes)
+
+    first = await handler.handle_RCPT(None, first_session, first_envelope, "foo@adb.com", [])
+    second = await handler.handle_RCPT(None, second_session, second_envelope, "bar@adb.com", [])
+
+    assert settings_response.status_code == 200
+    assert runtime.settings.smtp_idle_timeout_seconds == 120
+    assert first == "250 OK"
+    assert second == "421 concurrent connection limit exceeded"

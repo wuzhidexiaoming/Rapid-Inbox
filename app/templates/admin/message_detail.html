@@ -1,0 +1,86 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="section-title">
+    <div>
+      <p class="eyebrow">邮件详情</p>
+      <h2>{{ message.subject or "（无主题）" }}</h2>
+      <p class="section-copy">消息 ID：{{ message.id }}，接收时间：{{ cn_datetime(message.received_at) }}</p>
+    </div>
+    <div class="button-row">
+      <a class="button button--ghost" href="/admin/messages">返回列表</a>
+      <a class="button button--ghost" href="/admin/messages/{{ message.id }}/raw">下载 Raw</a>
+      {% if message.parse_status in ["pending", "failed"] %}
+        <form method="post" action="/admin/messages/{{ message.id }}/reparse">
+          <button class="button button--primary" type="submit">重新解析</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="details-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+    <div>
+      <p class="eyebrow">发件人</p>
+      <p>{{ message.from_addr or message.envelope_from or "未知" }}</p>
+    </div>
+    <div>
+      <p class="eyebrow">解析状态</p>
+      <p>{{ cn_parse_status(message.parse_status) }}{% if message.parse_error %}：{{ message.parse_error }}{% endif %}</p>
+    </div>
+    <div>
+      <p class="eyebrow">Raw 大小</p>
+      <p>{{ cn_bytes(message.raw_size_bytes) }}</p>
+    </div>
+  </div>
+
+  <h3>投递记录</h3>
+  {% if message.deliveries %}
+    <form method="post" action="/admin/messages/{{ message.id }}/delete-deliveries">
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th></th><th>邮箱</th><th>收件人</th><th>状态</th><th>时间</th></tr></thead>
+          <tbody>
+            {% for delivery in message.deliveries %}
+              <tr>
+                <td><input type="checkbox" name="delivery_ids" value="{{ delivery.delivery_id }}" {% if delivery.status != "active" %}disabled{% endif %} /></td>
+                <td><a href="/admin/mailboxes/{{ delivery.mailbox_id }}">{{ delivery.mailbox }}</a></td>
+                <td>{{ delivery.rcpt_to }}</td>
+                <td>{{ delivery.status }}</td>
+                <td>{{ cn_datetime(delivery.delivered_at) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="button-row" style="margin-top: 1rem;">
+        <button class="button button--danger" type="submit" onclick="return confirm('确认软删除选中的投递？未选择时会删除该邮件全部有效投递。')">删除投递</button>
+      </div>
+    </form>
+  {% endif %}
+
+  {% if message.attachments %}
+    <h3>附件</h3>
+    <ul class="stack">
+      {% for attachment in message.attachments %}
+        <li class="stack-row">
+          <div class="stack-meta">
+            <strong>{{ attachment.filename or attachment.safe_filename or attachment.id }}</strong>
+            <span class="muted">{{ attachment.content_type or "application/octet-stream" }} · {{ cn_bytes(attachment.size_bytes) }}</span>
+          </div>
+          <a class="button button--ghost" href="/admin/messages/{{ message.id }}/attachments/{{ attachment.id }}">下载</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <h3>正文</h3>
+  {% if message.text_body %}
+    <pre style="white-space: pre-wrap; word-break: break-word;">{{ message.text_body }}</pre>
+  {% elif message.html_body %}
+    <iframe sandbox srcdoc="{{ message.html_body | e }}" style="width: 100%; min-height: 360px; border: 1px solid var(--border); border-radius: 8px;"></iframe>
+  {% else %}
+    <div class="empty-state">没有可展示的正文内容。</div>
+  {% endif %}
+</section>
+{% endblock %}

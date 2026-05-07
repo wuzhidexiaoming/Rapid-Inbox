@@ -200,6 +200,25 @@ class ApiKeyService:
             raise LookupError("api key not found")
         return api_key
 
+    def list_keys(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+        with connect_database(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id
+                FROM api_keys
+                ORDER BY created_at DESC, id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            ).fetchall()
+            total = connection.execute("SELECT COUNT(*) AS count FROM api_keys").fetchone()
+            items = [
+                api_key
+                for row in rows
+                if (api_key := self._load_key(connection, int(row["id"]))) is not None
+            ]
+        return {"items": items, "total_count": 0 if total is None else int(total["count"])}
+
     async def update_key(
         self,
         api_key_id: int,
@@ -362,6 +381,44 @@ class ApiKeyService:
         with self._usage_lock:
             self._usage_windows.pop(api_key_id, None)
         return revoked
+
+    async def rotate_key(self, api_key_id: int) -> dict[str, Any]:
+        now = utc_now()
+
+        def operation(connection: sqlite3.Connection) -> dict[str, Any]:
+            row = connection.execute(
+                """
+                SELECT id, kind
+                FROM api_keys
+                WHERE id = ?
+                """,
+                (api_key_id,),
+            ).fetchone()
+            if row is None:
+                raise LookupError("api key not found")
+            key_prefix, plain_text, secret_hash = make_api_key(str(row["kind"]))
+            connection.execute(
+                """
+                UPDATE api_keys
+                SET key_prefix = ?,
+                    secret_hash = ?,
+                    status = 'active',
+                    revoked_at = NULL
+                WHERE id = ?
+                """,
+                (key_prefix, secret_hash, api_key_id),
+            )
+            api_key = self._load_key(connection, api_key_id)
+            if api_key is None:
+                raise LookupError("api key not found")
+            api_key["plain_text"] = plain_text
+            api_key["rotated_at"] = now
+            return api_key
+
+        rotated = await self.writer.execute(operation)
+        with self._usage_lock:
+            self._usage_windows.pop(api_key_id, None)
+        return rotated
 
     def authenticate_plain_text(self, plain_text: str, *, request_ip: str | None = None) -> PermissionContext:
         return self._authenticate_plain_text(plain_text, transport="header", request_ip=request_ip)

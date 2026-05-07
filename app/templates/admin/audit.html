@@ -1,6 +1,26 @@
 {% extends "admin/base.html" %}
 {% from "admin/_pagination.html" import pagination_nav %}
 
+{% block head %}
+<style>
+  .audit-filter-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.25rem;
+  }
+  .audit-filter-field {
+    display: grid;
+    gap: 0.35rem;
+  }
+  .audit-filter-field span {
+    color: var(--muted);
+    font-size: 0.86rem;
+    font-weight: 680;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
   <section class="card">
     <div class="section-title">
@@ -10,6 +30,33 @@
         <p class="section-copy">所有关键管理动作都会在这里留下记录，便于追踪变更与排查问题。</p>
       </div>
     </div>
+    <form method="get" action="/admin/audit" class="audit-filter-form">
+      <label class="audit-filter-field">
+        <span>执行者</span>
+        <input type="text" name="actor" value="{{ filters.actor }}" placeholder="actor_ref 或类型" />
+      </label>
+      <label class="audit-filter-field">
+        <span>动作</span>
+        <input type="text" name="action" value="{{ filters.action }}" placeholder="例如 domains.create" />
+      </label>
+      <label class="audit-filter-field">
+        <span>资源</span>
+        <input type="text" name="resource" value="{{ filters.resource }}" placeholder="resource_ref 或类型" />
+      </label>
+      <label class="audit-filter-field">
+        <span>开始时间</span>
+        <input type="text" name="start_time" value="{{ filters.start_time }}" placeholder="2026-04-18T00:00:00Z" />
+      </label>
+      <label class="audit-filter-field">
+        <span>结束时间</span>
+        <input type="text" name="end_time" value="{{ filters.end_time }}" placeholder="2026-04-19T00:00:00Z" />
+      </label>
+      <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+      <div class="button-row" style="align-self: end;">
+        <button class="button button--primary" type="submit">筛选</button>
+        <a class="button button--ghost" href="/admin/audit">清除</a>
+      </div>
+    </form>
     {% if logs %}
       <div class="table-wrap">
         <table class="table">

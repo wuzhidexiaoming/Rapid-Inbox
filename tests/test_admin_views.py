@@ -22,6 +22,25 @@ def _patch_sequenced_utc_now(monkeypatch) -> None:
     )
 
 
+async def _login_and_change_initial_password(app_client, runtime, *, new_password: str = "new-admin-password") -> None:
+    login_response = await app_client.post(
+        "/admin/login",
+        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
+        follow_redirects=True,
+    )
+    assert login_response.status_code == 200
+    response = await app_client.post(
+        "/admin/settings/password",
+        data={
+            "current_password": runtime.settings.bootstrap_admin_password,
+            "new_password": new_password,
+            "confirm_password": new_password,
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_admin_login_and_dashboard_page_flow(app_client, runtime) -> None:
     response = await app_client.post(
@@ -32,19 +51,40 @@ async def test_admin_login_and_dashboard_page_flow(app_client, runtime) -> None:
 
     assert response.status_code == 200
     assert "高效、优雅的域名与邮件管控平台" in response.text
-    assert "域名管理" in response.text
-    assert 'href="/admin/live"' in response.text
+    assert "当前账号仍在使用初始密码" in response.text
+    assert "修改管理员密码" in response.text
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_admin_must_change_password_before_other_admin_pages(app_client, runtime) -> None:
+    await app_client.post(
+        "/admin/login",
+        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
+        follow_redirects=True,
+    )
+
+    blocked = await app_client.get("/admin/domains")
+    await app_client.post(
+        "/admin/settings/password",
+        data={
+            "current_password": runtime.settings.bootstrap_admin_password,
+            "new_password": "new-admin-password",
+            "confirm_password": "new-admin-password",
+        },
+    )
+    allowed = await app_client.get("/admin/domains")
+
+    assert blocked.status_code == 303
+    assert blocked.headers["location"] == "/admin/settings?force_password_change=1"
+    assert allowed.status_code == 200
+    assert "新增域名" in allowed.text
 
 
 @pytest.mark.asyncio
 async def test_admin_logout_revokes_session_and_clears_cookie(app_client, runtime) -> None:
     cookie_name = runtime.settings.session_cookie_name
 
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     assert app_client.cookies.get(cookie_name) is not None
 
     response = await app_client.post("/admin/logout")
@@ -87,11 +127,7 @@ async def test_admin_live_placeholder_route_is_not_exposed(app_client) -> None:
 
 @pytest.mark.asyncio
 async def test_admin_live_page_uses_cursor_based_stream_url(app_client, runtime) -> None:
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
 
     response = await app_client.get("/admin/live")
 
@@ -113,11 +149,7 @@ async def test_admin_login_rejects_invalid_credentials_with_error(app_client) ->
 
 @pytest.mark.asyncio
 async def test_admin_domains_page_can_create_domain_via_form(app_client, runtime) -> None:
-    login = await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     response = await app_client.post(
         "/admin/domains",
         data={
@@ -136,7 +168,6 @@ async def test_admin_domains_page_can_create_domain_via_form(app_client, runtime
     created = runtime.domains.list_domains()[0]
     created_detail = runtime.domains.get_domain(created["id"])
 
-    assert login.status_code == 200
     assert response.status_code == 303
     assert response.headers["location"] == f"/admin/domains/{created['id']}"
     assert created["root_domain_ascii"] == "mail.adb.com"
@@ -168,11 +199,7 @@ async def test_admin_mailboxes_page_can_toggle_visibility_via_form(app_client, r
         }
     )
 
-    login = await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     mailbox = runtime.mailboxes.list_mailboxes()["items"][0]
     response = await app_client.post(
         f"/admin/mailboxes/{mailbox['id']}",
@@ -184,7 +211,6 @@ async def test_admin_mailboxes_page_can_toggle_visibility_via_form(app_client, r
 
     updated = runtime.mailboxes.get_mailbox(mailbox["id"])
 
-    assert login.status_code == 200
     assert response.status_code == 303
     assert response.headers["location"] == "/admin/mailboxes?limit=20&offset=0"
     assert updated["public_enabled"] is False
@@ -193,11 +219,7 @@ async def test_admin_mailboxes_page_can_toggle_visibility_via_form(app_client, r
 
 @pytest.mark.asyncio
 async def test_admin_api_keys_page_can_create_and_revoke_via_form(app_client, runtime) -> None:
-    login = await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     created = await app_client.post(
         "/admin/api-keys",
         data={
@@ -208,7 +230,6 @@ async def test_admin_api_keys_page_can_create_and_revoke_via_form(app_client, ru
     )
     match = re.search(r"(ri_admin_[a-f0-9]+_[A-Za-z0-9_-]+)", created.text)
 
-    assert login.status_code == 200
     assert created.status_code in {200, 201}
     assert match is not None
 
@@ -273,11 +294,7 @@ async def test_admin_settings_page_can_clear_all_mail(app_client, runtime, sampl
     assert any(path.is_file() for path in runtime.settings.raw_dir.rglob("*"))
     assert any(path.is_file() for path in runtime.settings.manifests_dir.rglob("*"))
 
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     settings_page = await app_client.get("/admin/settings")
     response = await app_client.post(
         "/admin/settings/clear-mail",
@@ -407,7 +424,7 @@ async def test_admin_settings_page_can_change_admin_password(app_client, runtime
     with connect_database(runtime.settings.database_path) as connection:
         audit = connection.execute(
             "SELECT action, resource_type FROM audit_logs WHERE action = ?",
-            ("admin.password.update",),
+            ("admin.password_change",),
         ).fetchone()
 
     assert audit is not None
@@ -432,11 +449,7 @@ async def test_admin_settings_page_can_change_admin_password(app_client, runtime
 @pytest.mark.asyncio
 async def test_admin_api_keys_page_uses_checkbox_scopes_and_domain_hints(app_client, runtime) -> None:
     await runtime.create_domain("adb.com")
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
 
     response = await app_client.get("/admin/api-keys")
 
@@ -454,11 +467,7 @@ async def test_admin_api_keys_page_uses_checkbox_scopes_and_domain_hints(app_cli
 @pytest.mark.asyncio
 async def test_admin_api_keys_form_without_domain_grants_allows_public_mailbox_access(app_client, runtime) -> None:
     await runtime.create_domain("adb.com")
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
 
     created = await app_client.post(
         "/admin/api-keys",
@@ -492,11 +501,7 @@ async def test_admin_api_keys_page_can_edit_permissions_and_domain_grants(app_cl
         domain_ids=[primary_domain["id"]],
         mailbox_patterns=[],
     )
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
 
     denied_before = await app_client.get(
         "/api/v1/public/mailboxes/foo@other.com/messages",
@@ -571,11 +576,7 @@ async def test_admin_mailboxes_page_paginates_results(app_client, runtime, monke
         )
     await runtime.drain_parser_queue()
 
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     response = await app_client.get("/admin/mailboxes")
 
     assert response.status_code == 200
@@ -607,11 +608,7 @@ async def test_admin_messages_page_paginates_results(app_client, runtime, monkey
         )
     await runtime.drain_parser_queue()
 
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     response = await app_client.get("/admin/messages")
 
     assert response.status_code == 200
@@ -630,11 +627,7 @@ async def test_admin_messages_page_shows_recipients(app_client, runtime, sample_
     )
     await runtime.drain_parser_queue()
 
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     response = await app_client.get("/admin/messages")
 
     assert response.status_code == 200
@@ -653,11 +646,7 @@ async def test_admin_messages_page_displays_shanghai_time(app_client, runtime, m
     )
     await runtime.drain_parser_queue()
 
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     response = await app_client.get("/admin/messages")
 
     assert response.status_code == 200
@@ -683,11 +672,7 @@ async def test_admin_api_keys_and_audit_pages_paginate_results(app_client, runti
             "success",
         )
 
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     api_keys_response = await app_client.get("/admin/api-keys")
     audit_response = await app_client.get("/admin/audit")
 
@@ -724,11 +709,7 @@ async def test_admin_live_page_limits_stream_items_and_paginates_sessions(app_cl
             }
         )
 
-    await app_client.post(
-        "/admin/login",
-        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
-        follow_redirects=True,
-    )
+    await _login_and_change_initial_password(app_client, runtime)
     response = await app_client.get("/admin/live")
 
     assert response.status_code == 200

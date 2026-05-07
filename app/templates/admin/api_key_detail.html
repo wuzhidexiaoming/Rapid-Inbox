@@ -147,6 +147,13 @@
     <div class="success-notice" data-aos="fade-down">API 密钥已更新。</div>
   {% endif %}
 
+  {% if rotated_api_key %}
+    <div class="success-notice" data-aos="fade-down">
+      API 密钥已轮换。新密钥只显示一次：
+      <code style="display: block; margin-top: 0.5rem; word-break: break-all;">{{ rotated_api_key.plain_text }}</code>
+    </div>
+  {% endif %}
+
   <section class="card" data-aos="fade-up">
     <div style="display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; flex-wrap: wrap;">
       <div>
@@ -328,6 +335,10 @@
         <a class="button button--ghost" href="/admin/api-keys">取消</a>
         <button class="button button--primary" type="submit" style="padding: 0.75rem 2rem;">保存修改</button>
       </div>
+    </form>
+
+    <form method="post" action="/admin/api-keys/{{ api_key.id }}/rotate" style="margin-top: 1rem;" onsubmit="return confirm('确认轮换该 API 密钥？旧 secret 将立即失效。')">
+      <button class="button button--danger" type="submit">轮换密钥</button>
     </form>
   </section>
 

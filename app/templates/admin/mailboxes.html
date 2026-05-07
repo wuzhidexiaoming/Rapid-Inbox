@@ -52,6 +52,31 @@
     <p class="muted" style="margin: 0; font-size: 0.95rem;">在此统一管控各邮箱的公开访问权限，或将特定邮箱从前端展示列表中隐藏。</p>
   </div>
 
+  <form method="get" action="/admin/mailboxes" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
+    <input type="text" name="q" value="{{ filters.q }}" placeholder="邮箱地址或备注" />
+    <select name="domain_id">
+      <option value="">全部域名</option>
+      {% for domain in domains %}
+        <option value="{{ domain.id }}" {% if filters.domain_id == (domain.id ~ '') %}selected{% endif %}>{{ domain.root_domain_ascii }}</option>
+      {% endfor %}
+    </select>
+    <select name="public_enabled">
+      <option value="">公开状态不限</option>
+      <option value="1" {% if filters.public_enabled == "1" %}selected{% endif %}>允许公开</option>
+      <option value="0" {% if filters.public_enabled == "0" %}selected{% endif %}>关闭公开</option>
+    </select>
+    <select name="is_hidden">
+      <option value="">隐藏状态不限</option>
+      <option value="1" {% if filters.is_hidden == "1" %}selected{% endif %}>前台隐藏</option>
+      <option value="0" {% if filters.is_hidden == "0" %}selected{% endif %}>前台可见</option>
+    </select>
+    <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+    <div class="button-row">
+      <button class="button button--primary" type="submit">筛选</button>
+      <a class="button button--ghost" href="/admin/mailboxes">清除</a>
+    </div>
+  </form>
+
   {% if mailboxes %}
     <div class="table-wrap">
       <table class="table">
@@ -68,7 +93,7 @@
             <tr class="mailbox-row">
               <td>
                 <div style="display: flex; flex-direction: column;">
-                  <strong style="color: var(--text); font-size: 1rem;">{{ mailbox.address_canonical }}</strong>
+                  <a href="/admin/mailboxes/{{ mailbox.id }}" style="color: var(--text); font-size: 1rem; font-weight: 700;">{{ mailbox.address_canonical }}</a>
                   {% if mailbox.notes %}
                     <span class="muted" style="font-size: 0.8rem; margin-top: 0.25rem;">{{ mailbox.notes }}</span>
                   {% endif %}

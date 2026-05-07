@@ -8,7 +8,7 @@ from typing import Any
 from app.db.connection import connect_database
 
 
-LIVE_SSE_EVENT_TYPES: tuple[str, ...] = ("rcpt_accepted", "rcpt_rejected", "queued")
+LIVE_SSE_EVENT_TYPES: tuple[str, ...] = ("connect", "rcpt_accepted", "rcpt_rejected", "queued", "disconnect", "error")
 
 
 def encode_sse(event: dict[str, object], *, event_id: str | None = None) -> str:

@@ -5,9 +5,10 @@ import asyncio
 import json
 import sqlite3
 import uuid
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from time import time_ns
+from time import monotonic, time_ns
 from pathlib import Path
 
 from app.auth import AuthService
@@ -49,6 +50,9 @@ class RapidInboxRuntime:
         self.parser = MessageParser(self.storage)
         self.parse_queue = ParseQueue(self._parse_message)
         self._mail_store_lock = asyncio.Lock()
+        self._smtp_connection_lock = asyncio.Lock()
+        self._active_smtp_connections: dict[str, str] = {}
+        self._smtp_ip_windows: dict[str, deque[float]] = {}
         self._retention_cleanup_task: asyncio.Task[None] | None = None
         self.live_state = LiveState()
         self.recovery = RecoveryScanner(self)
@@ -69,6 +73,8 @@ class RapidInboxRuntime:
     async def stop(self) -> None:
         await self._stop_message_retention_loop()
         await self.parse_queue.stop()
+        async with self._smtp_connection_lock:
+            self._active_smtp_connections.clear()
 
     async def create_domain(self, root_domain: str, **kwargs: Any) -> dict[str, Any]:
         return await self.domains.create_domain(root_domain, **kwargs)
@@ -347,6 +353,37 @@ class RapidInboxRuntime:
     def list_audit_logs(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
         return self.audit.list_logs(limit=limit, offset=offset)
 
+    async def register_smtp_connection(self, session_id: str, remote_ip: str) -> tuple[bool, str | None]:
+        async with self._smtp_connection_lock:
+            if session_id in self._active_smtp_connections:
+                return True, None
+
+            active_limit = int(self.settings.smtp_max_concurrent_connections)
+            if active_limit > 0 and len(self._active_smtp_connections) >= active_limit:
+                return False, "concurrent connection limit exceeded"
+
+            rate_limit = int(self.settings.smtp_connection_rate_limit_count)
+            window_seconds = int(self.settings.smtp_connection_rate_limit_window_seconds)
+            if rate_limit > 0 and window_seconds > 0:
+                now = monotonic()
+                cutoff = now - window_seconds
+                window = self._smtp_ip_windows.setdefault(remote_ip, deque())
+                while window and window[0] <= cutoff:
+                    window.popleft()
+                if len(window) >= rate_limit:
+                    return False, "per-ip connection rate limit exceeded"
+                window.append(now)
+
+            self._active_smtp_connections[session_id] = remote_ip
+            return True, None
+
+    async def release_smtp_connection(self, session_id: str) -> None:
+        async with self._smtp_connection_lock:
+            self._active_smtp_connections.pop(session_id, None)
+
+    def active_smtp_connection_count(self) -> int:
+        return len(self._active_smtp_connections)
+
     def _clear_mail_tables(self, connection: sqlite3.Connection) -> dict[str, int]:
         connection.execute("PRAGMA foreign_keys = OFF")
         messages_count = int(connection.execute("SELECT COUNT(*) AS count FROM messages").fetchone()["count"])
@@ -477,6 +514,30 @@ class RapidInboxRuntime:
 
         await self.writer.execute(operation)
 
+    async def record_smtp_event(self, session_id: str, event_type: str, payload: dict[str, Any]) -> None:
+        now = str(payload.get("ts") or utc_now())
+        payload_json = json.dumps(payload, ensure_ascii=False)
+
+        def operation(connection: sqlite3.Connection) -> None:
+            row = connection.execute(
+                """
+                SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq
+                FROM smtp_events
+                WHERE session_id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+            seq = int(row["next_seq"]) if row is not None else 1
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO smtp_events (session_id, seq, event_type, ts, payload_json)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (session_id, seq, event_type, now, payload_json),
+            )
+
+        await self.writer.execute(operation)
+
     async def close_smtp_session(
         self,
         session_id: str,
@@ -501,6 +562,7 @@ class RapidInboxRuntime:
             )
 
         await self.writer.execute(operation)
+        await self.release_smtp_connection(session_id)
 
     async def accept_message(
         self,
@@ -841,6 +903,7 @@ class RapidInboxRuntime:
         *,
         limit: int = 50,
         offset: int = 0,
+        cursor: tuple[str, str] | None = None,
         request_ip: str | None = None,
     ) -> dict[str, Any]:
         match = self.domains.match_address(mailbox_address)
@@ -848,9 +911,17 @@ class RapidInboxRuntime:
             raise LookupError("mailbox domain not managed")
 
         mailbox = await self._load_public_mailbox(match, request_ip=request_ip)
+        cursor_filter = ""
+        params: list[Any] = [mailbox["id"]]
+        if cursor is not None:
+            delivered_at, delivery_id = cursor
+            cursor_filter = "AND (d.delivered_at < ? OR (d.delivered_at = ? AND d.id < ?))"
+            params.extend([delivered_at, delivered_at, delivery_id])
+        page_limit = limit + 1
+        params.extend([page_limit, 0 if cursor is not None else offset])
         with connect_database(self.settings.database_path) as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT
                     d.id AS delivery_id,
                     d.delivered_at,
@@ -865,16 +936,24 @@ class RapidInboxRuntime:
                 FROM message_deliveries AS d
                 JOIN messages AS m ON m.id = d.message_id
                 WHERE d.mailbox_id = ? AND d.status = 'active'
-                ORDER BY d.delivered_at DESC, d.rowid DESC
+                    {cursor_filter}
+                ORDER BY d.delivered_at DESC, d.id DESC
                 LIMIT ? OFFSET ?
                 """,
-                (mailbox["id"], limit, offset),
+                tuple(params),
             ).fetchall()
 
-        items = [dict(row) for row in rows]
+        items = [dict(row) for row in rows[:limit]]
         message_count = int(mailbox["message_count"])
         has_previous = offset > 0
-        has_next = offset + len(items) < message_count
+        has_next = len(rows) > limit if cursor is not None else offset + len(items) < message_count
+        next_cursor = None
+        if has_next and items:
+            last_item = items[-1]
+            next_cursor = {
+                "delivered_at": last_item["delivered_at"],
+                "delivery_id": last_item["delivery_id"],
+            }
 
         return {
             "mailbox": match.address_canonical,
@@ -882,6 +961,8 @@ class RapidInboxRuntime:
             "message_count": message_count,
             "limit": limit,
             "offset": offset,
+            "pagination_mode": "cursor" if cursor is not None else "offset",
+            "next_cursor": next_cursor,
             "has_previous": has_previous,
             "has_next": has_next,
             "previous_offset": max(offset - limit, 0) if has_previous else None,
@@ -946,7 +1027,7 @@ class RapidInboxRuntime:
                     m.headers_json
                 FROM message_deliveries AS d
                 JOIN messages AS m ON m.id = d.message_id
-                WHERE d.id = ? AND d.mailbox_id = ?
+                WHERE d.id = ? AND d.mailbox_id = ? AND d.status = 'active'
                 """,
                 (delivery_id, mailbox["id"]),
             ).fetchone()

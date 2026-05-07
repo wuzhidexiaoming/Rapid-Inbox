@@ -9,57 +9,79 @@ class RapidInboxHandler:
     def __init__(self, runtime) -> None:
         self.runtime = runtime
 
+    async def handle_CONNECT(self, server, session, envelope, hostname, port):
+        session_id = self._ensure_session_id(session)
+        allowed, reason = await self._ensure_session_allowed(session, session_id)
+        if not allowed:
+            return f"421 {reason}"
+        await self.runtime.ensure_smtp_session(session_id, session)
+        await self._publish_session_event(
+            session_id,
+            {
+                **self._session_event(session, session_id, {"state": "connect"}),
+                "type": "connect",
+            },
+        )
+        return None
+
     async def handle_RCPT(self, server, session, envelope, address: str, rcpt_options):
         session_id = self._ensure_session_id(session)
+        allowed, reason = await self._ensure_session_allowed(session, session_id)
+        if not allowed:
+            return f"421 {reason}"
         await self.runtime.ensure_smtp_session(session_id, session, last_rcpt_to=address)
         session_event = self._session_event(session, session_id, {"rcpt_to": address, "state": "rcpt"})
         try:
             if address in envelope.rcpt_tos:
                 await self.runtime.record_smtp_rcpt(session_id, rcpt_to=address, accepted=True)
-                await self.runtime.live_state.publish(
+                await self._publish_session_event(
+                    session_id,
                     {
                         **session_event,
                         "type": "rcpt_accepted",
                         "rcpt_to": address,
                         "state": "rcpt",
-                    }
+                    },
                 )
                 return "250 OK"
 
             if self.runtime.domains.match_address(address) is None:
                 await self.runtime.record_smtp_rcpt(session_id, rcpt_to=address, accepted=False)
-                await self.runtime.live_state.publish(
+                await self._publish_session_event(
+                    session_id,
                     {
                         **session_event,
                         "type": "rcpt_rejected",
                         "rcpt_to": address,
                         "state": "rcpt",
-                    }
+                    },
                 )
                 return "550 domain not allowed"
 
             if len(envelope.rcpt_tos) >= self._max_recipients_per_message():
                 await self.runtime.record_smtp_rcpt(session_id, rcpt_to=address, accepted=False)
-                await self.runtime.live_state.publish(
+                await self._publish_session_event(
+                    session_id,
                     {
                         **session_event,
                         "type": "rcpt_rejected",
                         "rcpt_to": address,
                         "state": "rcpt",
                         "reason": "recipient limit exceeded",
-                    }
+                    },
                 )
                 return "552 too many recipients"
 
             envelope.rcpt_tos.append(address)
             await self.runtime.record_smtp_rcpt(session_id, rcpt_to=address, accepted=True)
-            await self.runtime.live_state.publish(
+            await self._publish_session_event(
+                session_id,
                 {
                     **session_event,
                     "type": "rcpt_accepted",
                     "rcpt_to": address,
                     "state": "rcpt",
-                }
+                },
             )
             return "250 OK"
         except Exception:
@@ -75,6 +97,9 @@ class RapidInboxHandler:
 
     async def handle_DATA(self, server, session, envelope):
         session_id = self._ensure_session_id(session)
+        allowed, reason = await self._ensure_session_allowed(session, session_id)
+        if not allowed:
+            return f"421 {reason}"
         await self.runtime.ensure_smtp_session(session_id, session)
         if not envelope.rcpt_tos:
             return "554 no valid recipients"
@@ -104,7 +129,8 @@ class RapidInboxHandler:
         message_id = None
         if result.startswith("250 queued as "):
             message_id = result.removeprefix("250 queued as ").strip() or None
-        await self.runtime.live_state.publish(
+        await self._publish_session_event(
+            session_id,
             {
                 **self._session_event(session, session_id, {"state": "queued"}),
                 "type": "queued",
@@ -112,7 +138,7 @@ class RapidInboxHandler:
                 "rcpt_count": len(envelope.rcpt_tos),
                 "message_id": message_id,
                 "state": "queued",
-            }
+            },
         )
         return result
 
@@ -127,9 +153,30 @@ class RapidInboxHandler:
                 result_code=221,
                 result_message="2.0.0 Bye",
             )
+            await self._publish_session_event(
+                session_id,
+                {
+                    **self._session_event(session, session_id, {"state": "disconnect"}),
+                    "type": "disconnect",
+                    "result_code": 221,
+                    "result_message": "2.0.0 Bye",
+                },
+            )
         except Exception:
             pass
         return "221 2.0.0 Bye"
+
+    async def _ensure_session_allowed(self, session, session_id: str) -> tuple[bool, str | None]:
+        peer = getattr(session, "peer", None) or ("unknown", None)
+        remote_ip = peer[0] or "unknown"
+        return await self.runtime.register_smtp_connection(session_id, str(remote_ip))
+
+    async def _publish_session_event(self, session_id: str, event: dict[str, object]) -> None:
+        await self.runtime.live_state.publish(event)
+        try:
+            await self.runtime.record_smtp_event(session_id, str(event.get("type") or "event"), dict(event))
+        except Exception:
+            return
 
     def _max_recipients_per_message(self) -> int:
         return int(self.runtime.get_settings()["max_recipients_per_message"])

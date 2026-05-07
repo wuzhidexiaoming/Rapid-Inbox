@@ -68,6 +68,38 @@ async def test_smtp_handler_accepts_allowed_domain_and_rejects_unknown(tmp_path,
 
 
 @pytest.mark.asyncio
+async def test_smtp_handler_persists_connect_and_disconnect_events(tmp_path) -> None:
+    settings = default_settings(tmp_path)
+    runtime = RapidInboxRuntime(settings)
+    handler = RapidInboxHandler(runtime)
+
+    await runtime.start()
+    try:
+        session = SimpleNamespace(peer=("127.0.0.1", 2525), host_name="mx1.test", ssl=None)
+        envelope = SimpleNamespace(rcpt_tos=[], mail_from="sender@example.com", content=b"")
+
+        connected = await handler.handle_CONNECT(None, session, envelope, "127.0.0.1", 2525)
+        quit_response = await handler.handle_QUIT(None, session, envelope)
+
+        with connect_database(settings.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT event_type
+                FROM smtp_events
+                WHERE session_id = ?
+                ORDER BY seq ASC
+                """,
+                (session.rapid_inbox_session_id,),
+            ).fetchall()
+
+        assert connected is None
+        assert quit_response.startswith("221")
+        assert [row["event_type"] for row in rows] == ["connect", "disconnect"]
+    finally:
+        await runtime.stop()
+
+
+@pytest.mark.asyncio
 async def test_smtp_handler_rejects_extra_recipients_after_live_limit_update(
     tmp_path,
     sample_email_bytes: bytes,

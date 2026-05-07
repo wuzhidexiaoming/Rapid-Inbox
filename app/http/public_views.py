@@ -94,6 +94,7 @@ async def mailbox_page(
 async def mailbox_websocket(mailbox_address: str, websocket: WebSocket) -> None:
     service = _message_service(websocket)
     after_cursor = websocket.query_params.get("after_cursor")
+    await websocket.accept()
     try:
         mailbox = await service.get_public_mailbox_view(
             mailbox_address,
@@ -115,7 +116,6 @@ async def mailbox_websocket(mailbox_address: str, websocket: WebSocket) -> None:
         last_seq = 0 if parsed_live_cursor is None else parsed_live_cursor[1]
 
     canonical_mailbox = str(mailbox["mailbox"])
-    await websocket.accept()
 
     try:
         while True:

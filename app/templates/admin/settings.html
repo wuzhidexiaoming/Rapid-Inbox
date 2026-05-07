@@ -204,6 +204,24 @@
     </div>
   {% endif %}
 
+  {% if settings_updated %}
+    <div class="settings-alert">
+      系统运行参数已更新。
+    </div>
+  {% endif %}
+
+  {% if settings_error %}
+    <div class="settings-alert settings-alert--error">
+      {{ settings_error }}
+    </div>
+  {% endif %}
+
+  {% if force_password_change %}
+    <div class="settings-alert settings-alert--error">
+      当前账号仍在使用初始密码。请先修改管理员密码，完成后才能继续使用后台其他页面。
+    </div>
+  {% endif %}
+
   {% if settings_items %}
     <div class="settings-grid">
       {% for item in settings_items %}
@@ -227,6 +245,45 @@
       <p>当前没有可展示的系统设置</p>
     </div>
   {% endif %}
+</section>
+
+<section class="card security-zone">
+  <p class="eyebrow">运行保护</p>
+  <h2 style="margin-bottom: 0.5rem;">调整接收限制</h2>
+  <p class="muted" style="margin: 0;">这些设置会写入 system_settings，并在当前运行进程中立即生效。</p>
+  <form class="settings-form" method="post" action="/admin/settings" style="max-width: 760px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+    <label class="settings-field">
+      <span>最大邮件大小（字节）</span>
+      <input type="number" min="1" step="1" name="max_message_size_bytes" value="{{ settings_form.max_message_size_bytes }}" required />
+    </label>
+    <label class="settings-field">
+      <span>单封邮件最大收件人数</span>
+      <input type="number" min="1" step="1" name="max_recipients_per_message" value="{{ settings_form.max_recipients_per_message }}" required />
+    </label>
+    <label class="settings-field">
+      <span>SMTP 空闲超时（秒）</span>
+      <input type="number" min="1" step="1" name="smtp_idle_timeout_seconds" value="{{ settings_form.smtp_idle_timeout_seconds }}" required />
+    </label>
+    <label class="settings-field">
+      <span>SMTP 并发连接上限</span>
+      <input type="number" min="0" step="1" name="smtp_max_concurrent_connections" value="{{ settings_form.smtp_max_concurrent_connections }}" required />
+    </label>
+    <label class="settings-field">
+      <span>每 IP 短窗口连接上限</span>
+      <input type="number" min="0" step="1" name="smtp_connection_rate_limit_count" value="{{ settings_form.smtp_connection_rate_limit_count }}" required />
+    </label>
+    <label class="settings-field">
+      <span>SMTP 连接限流窗口（秒）</span>
+      <input type="number" min="1" step="1" name="smtp_connection_rate_limit_window_seconds" value="{{ settings_form.smtp_connection_rate_limit_window_seconds }}" required />
+    </label>
+    <label class="settings-field">
+      <span>磁盘告警阈值（%）</span>
+      <input type="number" min="1" max="100" step="1" name="disk_warning_threshold_percent" value="{{ settings_form.disk_warning_threshold_percent }}" required />
+    </label>
+    <div class="button-row" style="align-self: end;">
+      <button class="button button--primary" type="submit">保存运行参数</button>
+    </div>
+  </form>
 </section>
 
 <section class="card security-zone">

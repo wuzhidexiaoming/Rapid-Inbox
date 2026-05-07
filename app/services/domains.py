@@ -106,14 +106,75 @@ class DomainService:
 
         domain_id = await self._writer.execute(operation)
         self.reload()
-        return {
-            "id": domain_id,
-            "root_domain_ascii": root_domain_ascii,
-            "accept_exact": accept_exact,
-            "accept_subdomains": accept_subdomains,
-            "public_web_enabled": public_web_enabled,
-            "public_api_enabled": public_api_enabled,
-        }
+        return self.get_domain(domain_id)
+
+    async def update_domain(self, domain_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            raise ValueError("invalid domain payload")
+
+        assignments: list[str] = []
+        values: list[Any] = []
+        if "root_domain" in payload:
+            root_domain = str(payload["root_domain"]).strip()
+            root_domain_ascii = self._coerce_root_domain(root_domain)
+            assignments.extend(["root_domain_ascii = ?", "root_domain_unicode = ?"])
+            values.extend([root_domain_ascii, root_domain])
+        for field_name in (
+            "accept_exact",
+            "accept_subdomains",
+            "public_web_enabled",
+            "public_api_enabled",
+            "local_part_case_sensitive",
+            "is_active",
+            "is_hidden",
+        ):
+            if field_name in payload:
+                assignments.append(f"{field_name} = ?")
+                values.append(int(self._coerce_bool(field_name, payload[field_name])))
+        if "plus_addressing_mode" in payload:
+            assignments.append("plus_addressing_mode = ?")
+            values.append(self._coerce_plus_addressing_mode(payload["plus_addressing_mode"]))
+        if "max_message_size_bytes" in payload:
+            assignments.append("max_message_size_bytes = ?")
+            values.append(self._coerce_positive_int("max_message_size_bytes", payload["max_message_size_bytes"]))
+        if "retention_days" in payload:
+            assignments.append("retention_days = ?")
+            values.append(self._coerce_nullable_positive_int("retention_days", payload["retention_days"]))
+        if "notes" in payload:
+            assignments.append("notes = ?")
+            values.append(self._nullable_text(payload["notes"]))
+
+        if not assignments:
+            return self.get_domain(domain_id)
+
+        updated_at = utc_now()
+        assignments.append("updated_at = ?")
+        values.append(updated_at)
+
+        def operation(connection: sqlite3.Connection) -> None:
+            row = connection.execute("SELECT id FROM domains WHERE id = ?", (domain_id,)).fetchone()
+            if row is None:
+                raise LookupError("domain not found")
+            connection.execute(
+                f"UPDATE domains SET {', '.join(assignments)} WHERE id = ?",
+                (*values, domain_id),
+            )
+
+        await self._writer.execute(operation)
+        self.reload()
+        return self.get_domain(domain_id)
+
+    async def delete_domain(self, domain_id: int) -> dict[str, Any]:
+        existing = self.get_domain(domain_id)
+
+        def operation(connection: sqlite3.Connection) -> None:
+            cursor = connection.execute("DELETE FROM domains WHERE id = ?", (domain_id,))
+            if cursor.rowcount != 1:
+                raise LookupError("domain not found")
+
+        await self._writer.execute(operation)
+        self.reload()
+        return existing
 
     def list_domains(self) -> list[dict[str, Any]]:
         with connect_database(self._database_path) as connection:
@@ -166,7 +227,25 @@ class DomainService:
             ).fetchone()
         if row is None:
             raise LookupError("domain not found")
-        return self._normalize_domain_row(row)
+        payload = self._normalize_domain_row(row)
+        payload["dns_recommendations"] = self.dns_recommendations(payload["root_domain_ascii"])
+        return payload
+
+    def dns_recommendations(self, root_domain: str) -> list[dict[str, str]]:
+        return [
+            {
+                "name": root_domain,
+                "type": "MX",
+                "value": f"10 {root_domain}",
+                "purpose": "根域邮箱收件路由",
+            },
+            {
+                "name": f"*.{root_domain}",
+                "type": "MX",
+                "value": f"10 {root_domain}",
+                "purpose": "子域邮箱收件路由",
+            },
+        ]
 
     def match_address(self, address: str) -> DomainMatch | None:
         return self._matcher.match_address(address)
@@ -207,6 +286,17 @@ class DomainService:
         if isinstance(value, float) and normalized != value:
             raise ValueError(f"invalid {field_name}")
         return normalized
+
+    def _coerce_nullable_positive_int(self, field_name: str, value: Any) -> int | None:
+        if value is None or value == "":
+            return None
+        return self._coerce_positive_int(field_name, value)
+
+    def _nullable_text(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
 
     def _normalize_domain_row(self, row: sqlite3.Row) -> dict[str, Any]:
         payload = dict(row)

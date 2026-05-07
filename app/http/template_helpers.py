@@ -38,12 +38,16 @@ _API_KEY_SCOPE_LABELS = {
     "live.read": "实时会话查看",
     "domains.read": "域名只读",
     "domains.write": "域名管理",
+    "mailboxes.read": "邮箱只读",
     "mailboxes.write": "邮箱管理",
+    "messages.read": "邮件只读",
     "messages.write": "邮件重解析",
+    "smtp.read": "SMTP 会话读取",
     "audit.read": "审计日志读取",
     "system.read": "系统设置只读",
     "system.write": "系统设置修改",
     "api_keys.write": "API 密钥管理",
+    "api_keys.read": "API 密钥只读",
 }
 
 _DNS_STATUS_LABELS = {
@@ -74,9 +78,12 @@ _SESSION_STATUS_LABELS = {
 }
 
 _EVENT_TYPE_LABELS = {
+    "connect": "新连接",
     "rcpt_accepted": "收件人已接受",
     "rcpt_rejected": "收件人被拒绝",
     "queued": "邮件已入队",
+    "disconnect": "连接断开",
+    "error": "异常",
 }
 
 _RESOURCE_TYPE_LABELS = {
@@ -90,15 +97,24 @@ _RESOURCE_TYPE_LABELS = {
 }
 
 _ACTION_LABELS = {
+    "admin.login": "管理员登录",
+    "admin.logout": "管理员退出",
+    "admin.password_change": "修改管理员密码",
     "domains.dns_check": "执行 DNS 检查",
     "domains.create": "创建域名",
+    "domains.update": "更新域名",
+    "domains.delete": "删除域名",
     "admin.password.update": "修改管理员密码",
     "mailboxes.update": "更新邮箱",
+    "mailboxes.delete": "删除邮箱投递",
     "mail.clear_all": "清除所有邮件",
     "messages.reparse": "重新解析邮件",
+    "deliveries.delete": "删除投递",
+    "deliveries.bulk_delete": "批量删除投递",
     "settings.update": "更新系统设置",
     "api_keys.create": "创建 API 密钥",
     "api_keys.update": "更新 API 密钥",
+    "api_keys.rotate": "轮换 API 密钥",
     "api_keys.revoke": "吊销 API 密钥",
 }
 
