@@ -97,6 +97,7 @@
     border-radius: var(--radius-lg);
     overflow: hidden;
     box-shadow: var(--shadow-lg);
+    color: #ebe7d8;
   }
 
   .terminal__header {
@@ -180,11 +181,16 @@
     flex-shrink: 0;
     min-width: 110px;
     text-align: center;
+    background: rgba(255, 255, 255, 0.08);
+    color: #d3cfc1;
   }
 
   .badge-rcpt_accepted { background: rgba(79, 125, 74, 0.22); color: #94d188; }
   .badge-rcpt_rejected { background: rgba(177, 67, 67, 0.22); color: #f08c8c; }
   .badge-queued { background: rgba(74, 107, 128, 0.22); color: #8fb6cd; }
+  .badge-connect { background: rgba(74, 107, 128, 0.22); color: #8fb6cd; }
+  .badge-disconnect { background: rgba(255, 255, 255, 0.08); color: #c8c4b6; }
+  .badge-error { background: rgba(177, 67, 67, 0.22); color: #f08c8c; }
   .badge-default { background: rgba(255, 255, 255, 0.08); color: #d3cfc1; }
 
   .log-message {
@@ -393,6 +399,9 @@
       if (type === 'rcpt_accepted') return 'badge-rcpt_accepted';
       if (type === 'rcpt_rejected') return 'badge-rcpt_rejected';
       if (type === 'queued') return 'badge-queued';
+      if (type === 'connect') return 'badge-connect';
+      if (type === 'disconnect') return 'badge-disconnect';
+      if (type === 'error') return 'badge-error';
       return 'badge-default';
     };
 
