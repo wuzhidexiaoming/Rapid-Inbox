@@ -5,6 +5,8 @@ import hashlib
 import os
 import re
 import shutil
+import threading
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -89,7 +91,13 @@ class FileStorage:
         for part_file in self.storage_root.rglob(".*.part"):
             part_file.unlink(missing_ok=True)
 
-    def clear_mail_data(self) -> None:
+    def cleanup_abandoned_clear_trash(self) -> None:
+        for trash_path in self.storage_root.glob(".clear-mail-trash-*"):
+            self._delete_tree_in_background(trash_path)
+
+    def clear_mail_data(self) -> int:
+        moved_directories = 0
+        trash_root = self.storage_root / f".clear-mail-trash-{uuid.uuid4().hex}"
         for directory in (
             self._settings.raw_dir,
             self._settings.text_dir,
@@ -98,8 +106,28 @@ class FileStorage:
             self._settings.manifests_dir,
             self._settings.tmp_dir,
         ):
-            shutil.rmtree(directory, ignore_errors=True)
+            if directory.exists():
+                trash_root.mkdir(parents=True, exist_ok=True)
+                try:
+                    directory.replace(trash_root / directory.name)
+                    moved_directories += 1
+                except OSError:
+                    shutil.rmtree(directory, ignore_errors=True)
             directory.mkdir(parents=True, exist_ok=True)
+        if moved_directories:
+            self._delete_tree_in_background(trash_root)
+        else:
+            shutil.rmtree(trash_root, ignore_errors=True)
+        return moved_directories
+
+    def _delete_tree_in_background(self, path: Path) -> None:
+        thread = threading.Thread(
+            target=shutil.rmtree,
+            args=(path,),
+            kwargs={"ignore_errors": True},
+            daemon=True,
+        )
+        thread.start()
 
     def _dated_path(self, category: str, message_id: str, suffix: str, received_at: str) -> str:
         year, month, day = path_date_parts(received_at)

@@ -97,12 +97,17 @@
     background: rgba(255, 255, 255, 0.05);
   }
 
-  .choice-card input[type="checkbox"] {
+  .choice-card input[type="checkbox"],
+  .choice-card input[type="radio"] {
     width: 1.1rem;
     height: 1.1rem;
     margin: 0.15rem 0 0;
     accent-color: var(--primary);
     flex: 0 0 auto;
+  }
+
+  .choice-grid--compact {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   }
 
   .choice-copy {
@@ -198,6 +203,7 @@
         <button class="copy-btn" onclick="copyApiKey()">复制</button>
       </div>
       <p style="color: var(--text); font-weight: 600;">名称：{{ created_api_key.name }}</p>
+      <a class="button button--ghost" href="/admin/api-keys/{{ created_api_key.id }}">编辑权限和授权</a>
     </section>
 
     <script>
@@ -260,17 +266,47 @@
 
       <div class="form-section">
         <span style="display: block; color: var(--muted); font-size: 0.9rem;">授权域名</span>
-        <p class="muted" style="margin: 0.35rem 0 0;">不勾选任何已接入域名时，此密钥可访问所有当前和后续新增的域名。</p>
+        <p class="muted" style="margin: 0.35rem 0 0;">选择“授权所有可用域名”时，此密钥可访问所有当前和后续新增的可用域名。</p>
+        <div class="choice-grid choice-grid--compact">
+          <label class="choice-card">
+            <input
+              type="radio"
+              name="domain_grant_mode"
+              value="all"
+              data-domain-mode
+              {% if create_form.domain_grant_mode != "selected" %}checked{% endif %}
+            />
+            <span class="choice-copy">
+              <span class="choice-title">授权所有可用域名</span>
+              <span class="choice-desc">覆盖所有当前域名，并自动覆盖后续新增的可用域名。</span>
+            </span>
+          </label>
+          <label class="choice-card">
+            <input
+              type="radio"
+              name="domain_grant_mode"
+              value="selected"
+              data-domain-mode
+              {% if create_form.domain_grant_mode == "selected" %}checked{% endif %}
+            />
+            <span class="choice-copy">
+              <span class="choice-title">仅授权选中的域名</span>
+              <span class="choice-desc">只允许访问下方勾选的已接入域名。</span>
+            </span>
+          </label>
+        </div>
         {% if available_domains %}
-          <details class="domain-dropdown" {% if create_form.domain_ids %}open{% endif %}>
+          <details class="domain-dropdown" data-domain-selector {% if create_form.domain_grant_mode == "selected" %}open{% endif %}>
             <summary>
               <span>
                 选择授权域名
                 <span class="domain-dropdown__hint" data-domain-summary>
-                  {% if create_form.domain_ids %}
+                  {% if create_form.domain_grant_mode == "selected" and create_form.domain_ids %}
                     已选择 {{ create_form.domain_ids | length }} 个域名
+                  {% elif create_form.domain_grant_mode == "selected" %}
+                    请选择域名
                   {% else %}
-                    全部域名（含后续新增）
+                    全部可用域名
                   {% endif %}
                 </span>
               </span>
@@ -298,7 +334,7 @@
           </details>
         {% else %}
           <div class="empty-state" style="margin-top: 0.75rem;">
-            <p>当前还没有已接入域名。不选择域名时，后续新增域名也会自动可用。</p>
+            <p>当前还没有已接入域名。选择全部域名后，后续新增的可用域名会自动覆盖。</p>
           </div>
         {% endif %}
       </div>
@@ -384,10 +420,13 @@
                     <form method="post" action="/admin/api-keys/{{ api_key.id }}/revoke" style="margin: 0;">
                       <input type="hidden" name="limit" value="{{ pagination.limit }}" />
                       <input type="hidden" name="offset" value="{{ pagination.offset }}" />
-                      <button class="button button--danger" type="submit" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">吊销</button>
+                      <div class="button-row">
+                        <a class="button button--ghost" href="/admin/api-keys/{{ api_key.id }}" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">编辑</a>
+                        <button class="button button--danger" type="submit" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">吊销</button>
+                      </div>
                     </form>
                   {% else %}
-                    <span class="muted" style="font-size: 0.85rem;">已失效</span>
+                    <a class="button button--ghost" href="/admin/api-keys/{{ api_key.id }}" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">编辑</a>
                   {% endif %}
                 </td>
               </tr>
@@ -412,18 +451,33 @@
     (() => {
       const summary = document.querySelector('[data-domain-summary]');
       const domainInputs = Array.from(document.querySelectorAll('input[data-domain-id]'));
-      if (!summary || domainInputs.length === 0) {
+      const modeInputs = Array.from(document.querySelectorAll('input[data-domain-mode]'));
+      const selector = document.querySelector('[data-domain-selector]');
+      if (!summary || domainInputs.length === 0 || modeInputs.length === 0) {
         return;
       }
 
       const renderSummary = () => {
+        const mode = modeInputs.find((input) => input.checked)?.value || 'all';
+        const selectedMode = mode === 'selected';
+        for (const input of domainInputs) {
+          input.disabled = !selectedMode;
+        }
+        if (selector && !selectedMode) {
+          selector.open = false;
+        }
         const selectedCount = domainInputs.filter((input) => input.checked).length;
-        summary.textContent = selectedCount > 0
-          ? `已选择 ${selectedCount} 个域名`
-          : '全部域名（含后续新增）';
+        if (!selectedMode) {
+          summary.textContent = '全部可用域名';
+          return;
+        }
+        summary.textContent = selectedCount > 0 ? `已选择 ${selectedCount} 个域名` : '请选择域名';
       };
 
       for (const input of domainInputs) {
+        input.addEventListener('change', renderSummary);
+      }
+      for (const input of modeInputs) {
         input.addEventListener('change', renderSummary);
       }
 

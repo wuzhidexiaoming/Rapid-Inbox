@@ -86,6 +86,27 @@ def _coerce_int_list(value: Any) -> list[int]:
     return [int(item) for item in _coerce_text_list(value)]
 
 
+def _coerce_non_negative_int(value: Any, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"invalid {field_name}")
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError(f"invalid {field_name}")
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid {field_name}") from exc
+    if normalized < 0:
+        raise ValueError(f"invalid {field_name}")
+    return normalized
+
+
+def _nullable_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def require_admin_key(
     request: Request,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
@@ -422,7 +443,8 @@ async def create_api_key(
     name = str(payload.get("name", "")).strip()
     kind = str(payload.get("kind", "")).strip()
     scopes = _coerce_text_list(payload.get("scopes"))
-    domain_ids = _coerce_int_list(payload.get("domain_ids"))
+    grant_all_domains = _coerce_bool(payload.get("grant_all_domains")) if "grant_all_domains" in payload else False
+    domain_ids = [] if grant_all_domains else _coerce_int_list(payload.get("domain_ids"))
     mailbox_patterns = _coerce_text_list(payload.get("mailbox_patterns"))
 
     if not name:
@@ -445,6 +467,65 @@ async def create_api_key(
 
     await _write_audit_best_effort(request, admin, "api_keys.create", "api_key", str(created["id"]), "success")
     return created
+
+
+@router.patch("/api/v1/admin/api-keys/{api_key_id}")
+async def update_api_key(
+    api_key_id: int,
+    payload: dict[str, Any],
+    request: Request,
+    admin: PermissionContext = Depends(require_admin_key),
+) -> dict[str, Any]:
+    require_admin_scope(admin, "api_keys.write")
+    await _record_admin_key_usage(request, admin)
+
+    updates: dict[str, Any] = {}
+    if "name" in payload:
+        updates["name"] = str(payload.get("name", "")).strip()
+    if "description" in payload:
+        updates["description"] = _nullable_text(payload.get("description"))
+    if "kind" in payload:
+        updates["kind"] = str(payload.get("kind", "")).strip()
+    if "status" in payload:
+        updates["status"] = str(payload.get("status", "")).strip()
+    if "allow_header" in payload:
+        updates["allow_header"] = _coerce_bool(payload.get("allow_header"))
+    if "allow_query" in payload:
+        updates["allow_query"] = _coerce_bool(payload.get("allow_query"))
+    if "rate_limit_per_min" in payload:
+        try:
+            updates["rate_limit_per_min"] = _coerce_non_negative_int(
+                payload.get("rate_limit_per_min"),
+                "rate_limit_per_min",
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if "allowed_ip_cidrs" in payload:
+        updates["allowed_ip_cidrs"] = _coerce_text_list(payload.get("allowed_ip_cidrs"))
+    if "expires_at" in payload:
+        updates["expires_at"] = _nullable_text(payload.get("expires_at"))
+    if "scopes" in payload:
+        updates["scopes"] = _coerce_text_list(payload.get("scopes"))
+    grant_all_domains = _coerce_bool(payload.get("grant_all_domains")) if "grant_all_domains" in payload else False
+    if grant_all_domains:
+        updates["domain_ids"] = []
+    elif "domain_ids" in payload:
+        try:
+            updates["domain_ids"] = _coerce_int_list(payload.get("domain_ids"))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="invalid domain_ids") from exc
+    if "mailbox_patterns" in payload:
+        updates["mailbox_patterns"] = _coerce_text_list(payload.get("mailbox_patterns"))
+
+    try:
+        updated = await request.app.state.runtime.api_keys.update_key(api_key_id, **updates)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    await _write_audit_best_effort(request, admin, "api_keys.update", "api_key", str(api_key_id), "success")
+    return updated
 
 
 @router.post("/api/v1/admin/api-keys/{api_key_id}/revoke")

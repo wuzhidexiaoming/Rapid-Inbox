@@ -288,9 +288,11 @@ async def test_admin_settings_page_can_clear_all_mail(app_client, runtime, sampl
     assert "清除所有邮件" in settings_page.text
     assert "近期网络会话" in settings_page.text
     assert response.status_code == 303
-    assert response.headers["location"] == (
+    assert response.headers["location"].startswith(
         "/admin/settings?mail_cleared=1&cleared_messages=1&cleared_mailboxes=1&cleared_sessions=1"
     )
+    assert "database_size_before_bytes=" in response.headers["location"]
+    assert "database_size_after_bytes=" in response.headers["location"]
 
     with connect_database(runtime.settings.database_path) as connection:
         counts = {
@@ -333,6 +335,40 @@ async def test_admin_settings_page_can_clear_all_mail(app_client, runtime, sampl
 
     assert mailbox_count == 1
     assert message_count == 0
+
+
+@pytest.mark.asyncio
+async def test_clear_all_mail_vacuums_sqlite_database(runtime) -> None:
+    large_headers_json = "x" * 2_000_000
+    with connect_database(runtime.settings.database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO messages (
+                id,
+                raw_path,
+                raw_sha256,
+                raw_size_bytes,
+                received_at,
+                headers_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "large-message",
+                "raw/large-message.eml",
+                "0" * 64,
+                1,
+                "2026-04-18T20:00:00Z",
+                large_headers_json,
+            ),
+        )
+        connection.commit()
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+    result = await runtime.clear_all_mail()
+
+    assert result["messages"] == 1
+    assert result["database_vacuumed"] == 1
+    assert result["database_size_after_bytes"] < result["database_size_before_bytes"]
 
 
 @pytest.mark.asyncio
@@ -407,8 +443,10 @@ async def test_admin_api_keys_page_uses_checkbox_scopes_and_domain_hints(app_cli
     assert response.status_code == 200
     assert 'type="checkbox" name="scopes" value="public.read"' in response.text
     assert 'type="text" name="scopes"' not in response.text
+    assert 'name="domain_grant_mode"' in response.text
+    assert 'value="all"' in response.text
     assert "选择授权域名" in response.text
-    assert "不勾选任何已接入域名时，此密钥可访问所有当前和后续新增的域名。" in response.text
+    assert "授权所有可用域名" in response.text
     assert "公开邮件读取" in response.text
     assert "adb.com" in response.text
 
@@ -441,6 +479,73 @@ async def test_admin_api_keys_form_without_domain_grants_allows_public_mailbox_a
     )
 
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_admin_api_keys_page_can_edit_permissions_and_domain_grants(app_client, runtime) -> None:
+    primary_domain = await runtime.create_domain("adb.com")
+    await runtime.create_domain("other.com")
+    key = await runtime.api_keys.create_key(
+        name="html-public-edit",
+        kind="public",
+        scopes=["public.read"],
+        domain_ids=[primary_domain["id"]],
+        mailbox_patterns=[],
+    )
+    await app_client.post(
+        "/admin/login",
+        data={"username": "admin", "password": runtime.settings.bootstrap_admin_password},
+        follow_redirects=True,
+    )
+
+    denied_before = await app_client.get(
+        "/api/v1/public/mailboxes/foo@other.com/messages",
+        headers={"X-API-Key": key["plain_text"]},
+    )
+    edit_page = await app_client.get(f"/admin/api-keys/{key['id']}")
+    updated = await app_client.post(
+        f"/admin/api-keys/{key['id']}",
+        data={
+            "name": "html-public-edited",
+            "kind": "public",
+            "status": "active",
+            "scopes": ["public.read"],
+            "domain_grant_mode": "all",
+            "mailbox_patterns": "",
+            "allow_header": "1",
+            "rate_limit_per_min": "3600",
+            "allowed_ip_cidrs": "",
+            "expires_at": "",
+        },
+    )
+    allowed_after = await app_client.get(
+        "/api/v1/public/mailboxes/foo@other.com/messages",
+        headers={"X-API-Key": key["plain_text"]},
+    )
+
+    with connect_database(runtime.settings.database_path) as connection:
+        row = connection.execute(
+            """
+            SELECT name
+            FROM api_keys
+            WHERE id = ?
+            """,
+            (key["id"],),
+        ).fetchone()
+        domain_grants = connection.execute(
+            "SELECT COUNT(*) AS count FROM api_key_domain_grants WHERE api_key_id = ?",
+            (key["id"],),
+        ).fetchone()
+
+    assert denied_before.status_code == 403
+    assert edit_page.status_code == 200
+    assert "保存修改" in edit_page.text
+    assert "授权所有可用域名" in edit_page.text
+    assert updated.status_code == 303
+    assert updated.headers["location"] == f"/admin/api-keys/{key['id']}?updated=1"
+    assert allowed_after.status_code == 200
+    assert row["name"] == "html-public-edited"
+    assert domain_grants["count"] == 0
 
 
 @pytest.mark.asyncio

@@ -134,6 +134,48 @@ async def test_admin_api_can_create_and_revoke_api_keys_through_http(admin_clien
 
 
 @pytest.mark.asyncio
+async def test_admin_api_can_update_api_key_permissions_and_grants(admin_client, runtime) -> None:
+    primary_domain = await runtime.create_domain("adb.com")
+    await runtime.create_domain("other.com")
+    key = await runtime.api_keys.create_key(
+        name="patch-public",
+        kind="public",
+        scopes=["public.read"],
+        domain_ids=[primary_domain["id"]],
+        mailbox_patterns=[],
+    )
+
+    denied_before = await admin_client.get(
+        "/api/v1/public/mailboxes/foo@other.com/messages",
+        headers={"X-API-Key": key["plain_text"]},
+    )
+    updated = await admin_client.patch(
+        f"/api/v1/admin/api-keys/{key['id']}",
+        json={
+            "name": "patch-public-updated",
+            "scopes": ["public.read"],
+            "grant_all_domains": True,
+            "allow_query": True,
+            "rate_limit_per_min": 0,
+        },
+    )
+    allowed_after = await admin_client.get(
+        "/api/v1/public/mailboxes/foo@other.com/messages",
+        headers={"X-API-Key": key["plain_text"]},
+    )
+    query_context = runtime.api_keys.authenticate_query(key["plain_text"])
+
+    assert denied_before.status_code == 403
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "patch-public-updated"
+    assert updated.json()["domain_grant_mode"] == "all"
+    assert updated.json()["domain_ids"] == []
+    assert updated.json()["allow_query"] is True
+    assert allowed_after.status_code == 200
+    assert query_context.domain_ids == ()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "query_string",
     [

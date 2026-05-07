@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from time import time_ns
+from pathlib import Path
 
 from app.auth import AuthService
 from app.auth.api_keys import ApiKeyService, get_active_permission_context
@@ -54,6 +55,7 @@ class RapidInboxRuntime:
 
     async def start(self) -> None:
         self.settings.ensure_directories()
+        self.storage.cleanup_abandoned_clear_trash()
         initialize_database(self.settings.database_path)
         await self.auth.ensure_bootstrap_admin()
         await self.system_settings.load_persisted_settings()
@@ -88,14 +90,19 @@ class RapidInboxRuntime:
             if hasattr(self.settings, key):
                 setattr(self.settings, key, value)
 
-    async def clear_all_mail(self) -> dict[str, int]:
+    async def clear_all_mail(self) -> dict[str, Any]:
         async with self._mail_store_lock:
             dropped_parse_tasks = self.parse_queue.clear_pending()
             await self.parse_queue.stop()
             try:
                 result = await self.writer.execute(self._clear_mail_tables)
-                self.storage.clear_mail_data()
+                result["moved_storage_directories"] = self.storage.clear_mail_data()
                 self.live_state.clear()
+                try:
+                    result.update(await self.writer.execute_maintenance(self._compact_mail_database))
+                except sqlite3.Error as exc:
+                    result["database_compaction_failed"] = 1
+                    result["database_compaction_error"] = str(exc)
                 result["dropped_parse_tasks"] = dropped_parse_tasks
                 return result
             finally:
@@ -341,6 +348,7 @@ class RapidInboxRuntime:
         return self.audit.list_logs(limit=limit, offset=offset)
 
     def _clear_mail_tables(self, connection: sqlite3.Connection) -> dict[str, int]:
+        connection.execute("PRAGMA foreign_keys = OFF")
         messages_count = int(connection.execute("SELECT COUNT(*) AS count FROM messages").fetchone()["count"])
         deliveries_count = int(connection.execute("SELECT COUNT(*) AS count FROM message_deliveries").fetchone()["count"])
         mailboxes_count = int(connection.execute("SELECT COUNT(*) AS count FROM mailboxes").fetchone()["count"])
@@ -351,14 +359,18 @@ class RapidInboxRuntime:
             connection.execute("SELECT COALESCE(SUM(raw_size_bytes), 0) AS total FROM messages").fetchone()["total"]
         )
 
-        connection.execute("DELETE FROM attachments")
-        connection.execute("DELETE FROM message_deliveries")
-        connection.execute("DELETE FROM messages")
-        connection.execute("DELETE FROM mailboxes")
-        connection.execute("DELETE FROM smtp_events")
-        connection.execute("DELETE FROM smtp_sessions")
-        connection.execute("DELETE FROM sqlite_sequence WHERE name = 'mailboxes'")
-        connection.execute("DELETE FROM sqlite_sequence WHERE name = 'smtp_events'")
+        for table_name in (
+            "attachments",
+            "message_deliveries",
+            "messages",
+            "mailboxes",
+            "smtp_events",
+            "smtp_sessions",
+        ):
+            connection.execute(f"DELETE FROM {table_name}")
+        connection.execute("DELETE FROM sqlite_sequence WHERE name IN ('mailboxes', 'smtp_events')")
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise RuntimeError("mail store foreign key check failed after clear")
         return {
             "messages": messages_count,
             "deliveries": deliveries_count,
@@ -368,6 +380,43 @@ class RapidInboxRuntime:
             "smtp_events": smtp_events_count,
             "raw_size_bytes": total_bytes,
         }
+
+    def _compact_mail_database(self, connection: sqlite3.Connection) -> dict[str, int]:
+        page_size = int(connection.execute("PRAGMA page_size").fetchone()[0])
+        freelist_before = int(connection.execute("PRAGMA freelist_count").fetchone()[0])
+        size_before = self._database_file_size_bytes()
+
+        checkpoint_before = connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        vacuumed = 0
+        if freelist_before > 0:
+            connection.execute("VACUUM")
+            vacuumed = 1
+        connection.execute("PRAGMA optimize")
+        checkpoint_after = connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+
+        freelist_after = int(connection.execute("PRAGMA freelist_count").fetchone()[0])
+        size_after = self._database_file_size_bytes()
+        return {
+            "database_size_before_bytes": size_before,
+            "database_size_after_bytes": size_after,
+            "database_free_bytes_before": freelist_before * page_size,
+            "database_free_bytes_after": freelist_after * page_size,
+            "database_vacuumed": vacuumed,
+            "database_checkpoint_busy_before": int(checkpoint_before[0]) if checkpoint_before is not None else 0,
+            "database_checkpoint_busy_after": int(checkpoint_after[0]) if checkpoint_after is not None else 0,
+        }
+
+    def _database_file_size_bytes(self) -> int:
+        database_path = self.settings.database_path
+        return sum(
+            path.stat().st_size
+            for path in (
+                database_path,
+                Path(f"{database_path}-wal"),
+                Path(f"{database_path}-shm"),
+            )
+            if path.exists()
+        )
 
     async def ensure_smtp_session(self, session_id: str, session: Any, *, last_rcpt_to: str | None = None) -> None:
         now = utc_now()

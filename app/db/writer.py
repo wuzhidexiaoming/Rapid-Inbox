@@ -29,5 +29,13 @@ class DatabaseWriter:
                 connection.commit()
                 return result
 
+    def _execute_maintenance_sync(self, operation: Callable[[sqlite3.Connection], T]) -> T:
+        with self._lock:
+            with connect_database(self._database_path) as connection:
+                return operation(connection)
+
     async def execute(self, operation: Callable[[sqlite3.Connection], T]) -> T:
         return await asyncio.to_thread(self._execute_sync, operation)
+
+    async def execute_maintenance(self, operation: Callable[[sqlite3.Connection], T]) -> T:
+        return await asyncio.to_thread(self._execute_maintenance_sync, operation)

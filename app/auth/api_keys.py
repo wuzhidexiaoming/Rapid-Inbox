@@ -24,6 +24,8 @@ from .permissions import PermissionContext
 
 
 VALID_API_KEY_KINDS = {"admin", "public", "service"}
+VALID_API_KEY_STATUSES = {"active", "revoked", "expired", "disabled"}
+_UNSET = object()
 _ACTIVE_PERMISSION_CONTEXT: ContextVar[PermissionContext | None] = ContextVar(
     "active_permission_context",
     default=None,
@@ -98,7 +100,7 @@ class ApiKeyService:
     ) -> dict[str, Any]:
         if kind not in VALID_API_KEY_KINDS:
             raise ValueError("invalid api key kind")
-        if status not in {"active", "revoked", "expired", "disabled"}:
+        if status not in VALID_API_KEY_STATUSES:
             raise ValueError("invalid api key status")
 
         scope_values = self._unique_text_values(scopes)
@@ -190,6 +192,141 @@ class ApiKeyService:
             }
 
         return await self.writer.execute(operation)
+
+    def get_key(self, api_key_id: int) -> dict[str, Any]:
+        with connect_database(self.database_path) as connection:
+            api_key = self._load_key(connection, api_key_id)
+        if api_key is None:
+            raise LookupError("api key not found")
+        return api_key
+
+    async def update_key(
+        self,
+        api_key_id: int,
+        *,
+        name: object = _UNSET,
+        description: object = _UNSET,
+        kind: object = _UNSET,
+        status: object = _UNSET,
+        allow_header: object = _UNSET,
+        allow_query: object = _UNSET,
+        rate_limit_per_min: object = _UNSET,
+        allowed_ip_cidrs: object = _UNSET,
+        expires_at: object = _UNSET,
+        scopes: object = _UNSET,
+        domain_ids: object = _UNSET,
+        mailbox_patterns: object = _UNSET,
+    ) -> dict[str, Any]:
+        field_updates: dict[str, Any] = {}
+
+        if name is not _UNSET:
+            normalized_name = str(name).strip()
+            if not normalized_name:
+                raise ValueError("name is required")
+            field_updates["name"] = normalized_name
+        if description is not _UNSET:
+            field_updates["description"] = self._nullable_text(description)
+        expected_kind: str | None = None
+        if kind is not _UNSET:
+            normalized_kind = str(kind).strip()
+            if normalized_kind not in VALID_API_KEY_KINDS:
+                raise ValueError("invalid api key kind")
+            expected_kind = normalized_kind
+        if status is not _UNSET:
+            normalized_status = str(status).strip()
+            if normalized_status not in VALID_API_KEY_STATUSES:
+                raise ValueError("invalid api key status")
+            field_updates["status"] = normalized_status
+        if allow_header is not _UNSET:
+            field_updates["allow_header"] = int(self._coerce_bool("allow_header", allow_header))
+        if allow_query is not _UNSET:
+            field_updates["allow_query"] = int(self._coerce_bool("allow_query", allow_query))
+        if rate_limit_per_min is not _UNSET:
+            field_updates["rate_limit_per_min"] = self._coerce_non_negative_int(
+                "rate_limit_per_min",
+                rate_limit_per_min,
+            )
+        if allowed_ip_cidrs is not _UNSET:
+            allowed_ip_values = self._normalize_ip_cidrs(allowed_ip_cidrs or ())
+            field_updates["allowed_ip_cidrs"] = (
+                json.dumps(list(allowed_ip_values), ensure_ascii=False) if allowed_ip_values else None
+            )
+        if expires_at is not _UNSET:
+            field_updates["expires_at"] = self._nullable_text(expires_at)
+
+        scope_values = self._unique_text_values(scopes) if scopes is not _UNSET else None
+        domain_values = self._unique_int_values(domain_ids) if domain_ids is not _UNSET else None
+        mailbox_values = self._unique_text_values(mailbox_patterns) if mailbox_patterns is not _UNSET else None
+        now = utc_now()
+
+        def operation(connection: sqlite3.Connection) -> dict[str, Any]:
+            row = connection.execute(
+                """
+                SELECT id, kind
+                FROM api_keys
+                WHERE id = ?
+                """,
+                (api_key_id,),
+            ).fetchone()
+            if row is None:
+                raise LookupError("api key not found")
+            if expected_kind is not None and row["kind"] != expected_kind:
+                raise ValueError("api key kind cannot be changed")
+
+            if field_updates:
+                assignments = [f"{column} = ?" for column in field_updates]
+                params = list(field_updates.values())
+                if field_updates.get("status") == "revoked":
+                    assignments.append("revoked_at = COALESCE(revoked_at, ?)")
+                    params.append(now)
+                elif "status" in field_updates:
+                    assignments.append("revoked_at = NULL")
+                params.append(api_key_id)
+                connection.execute(
+                    f"""
+                    UPDATE api_keys
+                    SET {', '.join(assignments)}
+                    WHERE id = ?
+                    """,
+                    params,
+                )
+
+            if scope_values is not None:
+                connection.execute("DELETE FROM api_key_scopes WHERE api_key_id = ?", (api_key_id,))
+                for scope in scope_values:
+                    connection.execute(
+                        "INSERT INTO api_key_scopes (api_key_id, scope) VALUES (?, ?)",
+                        (api_key_id, scope),
+                    )
+            if domain_values is not None:
+                connection.execute("DELETE FROM api_key_domain_grants WHERE api_key_id = ?", (api_key_id,))
+                for domain_id in domain_values:
+                    connection.execute(
+                        "INSERT INTO api_key_domain_grants (api_key_id, domain_id) VALUES (?, ?)",
+                        (api_key_id, domain_id),
+                    )
+            if mailbox_values is not None:
+                connection.execute("DELETE FROM api_key_mailbox_grants WHERE api_key_id = ?", (api_key_id,))
+                for mailbox_pattern in mailbox_values:
+                    connection.execute(
+                        "INSERT INTO api_key_mailbox_grants (api_key_id, mailbox_pattern) VALUES (?, ?)",
+                        (api_key_id, mailbox_pattern),
+                    )
+
+            api_key = self._load_key(connection, api_key_id)
+            if api_key is None:
+                raise LookupError("api key not found")
+            return api_key
+
+        updated = await self.writer.execute(operation)
+        if (
+            field_updates.get("status") != "active"
+            or "rate_limit_per_min" in field_updates
+            or "allowed_ip_cidrs" in field_updates
+        ):
+            with self._usage_lock:
+                self._usage_windows.pop(api_key_id, None)
+        return updated
 
     async def revoke_key(self, api_key_id: int) -> dict[str, Any]:
         revoked_at = utc_now()
@@ -411,6 +548,32 @@ class ApiKeyService:
             unique_values.append(normalized)
         return tuple(unique_values)
 
+    def _nullable_text(self, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    def _coerce_bool(self, field_name: str, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int) and not isinstance(value, bool) and value in (0, 1):
+            return bool(value)
+        raise ValueError(f"invalid {field_name}")
+
+    def _coerce_non_negative_int(self, field_name: str, value: object) -> int:
+        if isinstance(value, bool):
+            raise ValueError(f"invalid {field_name}")
+        if isinstance(value, float) and not value.is_integer():
+            raise ValueError(f"invalid {field_name}")
+        try:
+            normalized = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid {field_name}") from exc
+        if normalized < 0:
+            raise ValueError(f"invalid {field_name}")
+        return normalized
+
     def _normalize_ip_cidrs(self, values: Sequence[str]) -> tuple[str, ...]:
         seen: set[str] = set()
         normalized_values: list[str] = []
@@ -454,6 +617,104 @@ class ApiKeyService:
             if request_address in network:
                 return True
         return False
+
+    def _load_key(self, connection: sqlite3.Connection, api_key_id: int) -> dict[str, Any] | None:
+        row = connection.execute(
+            """
+            SELECT
+                id,
+                public_id,
+                name,
+                description,
+                kind,
+                key_prefix,
+                owner_admin_id,
+                status,
+                allow_header,
+                allow_query,
+                rate_limit_per_min,
+                allowed_ip_cidrs,
+                expires_at,
+                last_used_at,
+                last_used_ip,
+                revoked_at,
+                created_by_admin_id,
+                created_at
+            FROM api_keys
+            WHERE id = ?
+            """,
+            (api_key_id,),
+        ).fetchone()
+        if row is None:
+            return None
+
+        scope_rows = connection.execute(
+            """
+            SELECT scope
+            FROM api_key_scopes
+            WHERE api_key_id = ?
+            ORDER BY scope ASC
+            """,
+            (api_key_id,),
+        ).fetchall()
+        domain_rows = connection.execute(
+            """
+            SELECT domain_id
+            FROM api_key_domain_grants
+            WHERE api_key_id = ?
+            ORDER BY domain_id ASC
+            """,
+            (api_key_id,),
+        ).fetchall()
+        mailbox_rows = connection.execute(
+            """
+            SELECT mailbox_pattern
+            FROM api_key_mailbox_grants
+            WHERE api_key_id = ?
+            ORDER BY mailbox_pattern ASC
+            """,
+            (api_key_id,),
+        ).fetchall()
+
+        allowed_ip_cidrs = self._decode_allowed_ip_cidrs(row["allowed_ip_cidrs"])
+        domain_ids = [int(domain_row["domain_id"]) for domain_row in domain_rows]
+        return {
+            "id": int(row["id"]),
+            "public_id": str(row["public_id"]),
+            "name": str(row["name"]),
+            "description": row["description"],
+            "kind": str(row["kind"]),
+            "key_prefix": str(row["key_prefix"]),
+            "owner_admin_id": row["owner_admin_id"],
+            "status": str(row["status"]),
+            "allow_header": bool(row["allow_header"]),
+            "allow_query": bool(row["allow_query"]),
+            "rate_limit_per_min": int(row["rate_limit_per_min"]),
+            "allowed_ip_cidrs": allowed_ip_cidrs,
+            "expires_at": row["expires_at"],
+            "last_used_at": row["last_used_at"],
+            "last_used_ip": row["last_used_ip"],
+            "revoked_at": row["revoked_at"],
+            "created_by_admin_id": row["created_by_admin_id"],
+            "created_at": row["created_at"],
+            "scopes": [str(scope_row["scope"]) for scope_row in scope_rows],
+            "domain_ids": domain_ids,
+            "domain_grant_mode": "selected" if domain_ids else "all",
+            "mailbox_patterns": [str(mailbox_row["mailbox_pattern"]) for mailbox_row in mailbox_rows],
+        }
+
+    def _decode_allowed_ip_cidrs(self, value: str | None) -> list[str]:
+        if not value:
+            return []
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        if isinstance(decoded, str):
+            return [decoded]
+        if isinstance(decoded, list):
+            return [str(item) for item in decoded if str(item).strip()]
+        return []
 
 
 __all__ = [

@@ -67,6 +67,13 @@ API_KEY_SCOPE_OPTIONS = (
     },
 )
 
+API_KEY_STATUS_OPTIONS = (
+    {"value": "active", "label": "可用"},
+    {"value": "disabled", "label": "停用"},
+    {"value": "expired", "label": "过期"},
+    {"value": "revoked", "label": "吊销"},
+)
+
 
 def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client is not None else None
@@ -132,6 +139,34 @@ def _parse_multi_text_values(values: list[str] | None) -> list[str]:
 
 def _parse_multi_int_values(values: list[str] | None) -> list[int]:
     return [int(item) for item in _parse_multi_text_values(values)]
+
+
+def _parse_nullable_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    return text or None
+
+
+def _parse_domain_grant_form(
+    form: dict[str, list[str]],
+    *,
+    default_mode: str = "all",
+) -> tuple[str, list[int]]:
+    raw_mode = (form.get("domain_grant_mode") or [None])[-1]
+    if raw_mode is None:
+        mode = "selected" if form.get("domain_ids") else default_mode
+    else:
+        mode = raw_mode.strip() or default_mode
+    if mode not in {"all", "selected"}:
+        raise ValueError("invalid domain grant mode")
+    if mode == "all":
+        return mode, []
+
+    domain_ids = _parse_multi_int_values(form.get("domain_ids"))
+    if not domain_ids:
+        raise ValueError("empty selected domain grants")
+    return mode, domain_ids
 
 
 def _parse_positive_int(value: str | None, *, default: int, field_name: str) -> int:
@@ -425,12 +460,76 @@ def _api_key_form_values(form: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = form or {}
     scopes = payload.get("scopes", [])
     domain_ids = payload.get("domain_ids", [])
+    domain_grant_mode = str(
+        payload.get("domain_grant_mode") or ("selected" if domain_ids else "all")
+    )
     return {
         "name": str(payload.get("name", "新的 API 密钥") or "新的 API 密钥"),
         "kind": str(payload.get("kind", "admin") or "admin"),
         "scopes": [str(item) for item in scopes],
+        "domain_grant_mode": domain_grant_mode,
         "domain_ids": [str(item) for item in domain_ids],
         "mailbox_patterns": str(payload.get("mailbox_patterns", "") or ""),
+    }
+
+
+def _api_key_edit_form_values(api_key: dict[str, Any], form: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = form or api_key
+    scopes = payload.get("scopes", [])
+    domain_ids = payload.get("domain_ids", [])
+    mailbox_patterns = payload.get("mailbox_patterns", [])
+    allowed_ip_cidrs = payload.get("allowed_ip_cidrs", [])
+    domain_grant_mode = str(
+        payload.get("domain_grant_mode") or ("selected" if domain_ids else "all")
+    )
+    return {
+        "name": str(payload.get("name", "") or ""),
+        "description": str(payload.get("description", "") or ""),
+        "kind": str(payload.get("kind", "admin") or "admin"),
+        "status": str(payload.get("status", "active") or "active"),
+        "scopes": [str(item) for item in scopes],
+        "domain_grant_mode": domain_grant_mode,
+        "domain_ids": [str(item) for item in domain_ids],
+        "mailbox_patterns": (
+            ", ".join(str(item) for item in mailbox_patterns)
+            if isinstance(mailbox_patterns, list)
+            else str(mailbox_patterns or "")
+        ),
+        "allow_header": bool(payload.get("allow_header", True)),
+        "allow_query": bool(payload.get("allow_query", False)),
+        "rate_limit_per_min": str(payload.get("rate_limit_per_min", "3600") or "0"),
+        "allowed_ip_cidrs": (
+            ", ".join(str(item) for item in allowed_ip_cidrs)
+            if isinstance(allowed_ip_cidrs, list)
+            else str(allowed_ip_cidrs or "")
+        ),
+        "expires_at": str(payload.get("expires_at", "") or ""),
+    }
+
+
+def _api_key_edit_context(
+    request: Request,
+    admin: dict[str, Any],
+    api_key_id: int,
+    *,
+    error: str | None = None,
+    form: dict[str, Any] | None = None,
+    updated: bool = False,
+) -> dict[str, Any]:
+    try:
+        api_key = request.app.state.runtime.api_keys.get_key(api_key_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return {
+        "page_title": f"编辑 API 密钥：{api_key['name']}",
+        "admin": admin,
+        "api_key": api_key,
+        "available_scopes": API_KEY_SCOPE_OPTIONS,
+        "available_statuses": API_KEY_STATUS_OPTIONS,
+        "available_domains": request.app.state.runtime.list_domains(),
+        "form": form or _api_key_edit_form_values(api_key),
+        "error": error,
+        "updated": updated,
     }
 
 
@@ -805,14 +904,21 @@ async def create_api_key(request: Request) -> Response:
     scopes = _parse_multi_text_values(form.get("scopes"))
     mailbox_patterns = _parse_csv_values((form.get("mailbox_patterns") or [""])[-1])
     try:
-        domain_ids = _parse_multi_int_values(form.get("domain_ids"))
-    except ValueError:
+        domain_grant_mode, domain_ids = _parse_domain_grant_form(form)
+    except ValueError as exc:
         domain_ids = []
+        domain_grant_mode = (form.get("domain_grant_mode") or ["all"])[-1]
+        error_message = (
+            "请选择至少一个授权域名，或切换为授权所有可用域名。"
+            if str(exc) == "empty selected domain grants"
+            else "授权域名选择无效。"
+        )
         create_form = _api_key_form_values(
             {
                 "name": name,
                 "kind": kind,
                 "scopes": scopes,
+                "domain_grant_mode": domain_grant_mode,
                 "domain_ids": [],
                 "mailbox_patterns": (form.get("mailbox_patterns") or [""])[-1],
             }
@@ -820,7 +926,7 @@ async def create_api_key(request: Request) -> Response:
         return _render(
             request,
             "admin/api_keys.html",
-            _api_keys_page_context(request, admin_or_response, error="授权域名选择无效。", create_form=create_form),
+            _api_keys_page_context(request, admin_or_response, error=error_message, create_form=create_form),
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
     create_form = _api_key_form_values(
@@ -828,6 +934,7 @@ async def create_api_key(request: Request) -> Response:
             "name": name,
             "kind": kind,
             "scopes": scopes,
+            "domain_grant_mode": domain_grant_mode,
             "domain_ids": domain_ids,
             "mailbox_patterns": (form.get("mailbox_patterns") or [""])[-1],
         }
@@ -863,6 +970,153 @@ async def create_api_key(request: Request) -> Response:
         _api_keys_page_context(request, admin_or_response, created_api_key=created),
         status_code=status.HTTP_200_OK,
     )
+
+
+@router.get("/admin/api-keys/{api_key_id}", response_class=HTMLResponse)
+async def api_key_detail_page(
+    api_key_id: int,
+    request: Request,
+    updated: int = Query(default=0, ge=0, le=1),
+) -> Response:
+    admin_or_response = await _require_admin(request)
+    if isinstance(admin_or_response, Response):
+        return admin_or_response
+
+    return _render(
+        request,
+        "admin/api_key_detail.html",
+        _api_key_edit_context(request, admin_or_response, api_key_id, updated=bool(updated)),
+    )
+
+
+@router.post("/admin/api-keys/{api_key_id}", response_class=HTMLResponse)
+async def update_api_key_from_form(api_key_id: int, request: Request) -> Response:
+    admin_or_response = await _require_admin(request)
+    if isinstance(admin_or_response, Response):
+        return admin_or_response
+
+    try:
+        current_api_key = request.app.state.runtime.api_keys.get_key(api_key_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    form = _parse_form_body_lists(await request.body())
+    name = (form.get("name") or [""])[-1].strip()
+    kind = ((form.get("kind") or [current_api_key["kind"]])[-1].strip() or current_api_key["kind"])
+    status_value = ((form.get("status") or ["active"])[-1].strip() or "active")
+    scopes = _parse_multi_text_values(form.get("scopes"))
+    mailbox_patterns_raw = (form.get("mailbox_patterns") or [""])[-1]
+    allowed_ip_cidrs_raw = (form.get("allowed_ip_cidrs") or [""])[-1]
+    expires_at = _parse_nullable_text((form.get("expires_at") or [""])[-1])
+    try:
+        domain_grant_mode, domain_ids = _parse_domain_grant_form(form)
+        rate_limit_per_min = _parse_non_negative_int(
+            (form.get("rate_limit_per_min") or ["3600"])[-1],
+            default=3600,
+            field_name="rate_limit_per_min",
+        )
+    except ValueError as exc:
+        domain_grant_mode = (form.get("domain_grant_mode") or ["all"])[-1]
+        domain_ids = []
+        error_message = (
+            "请选择至少一个授权域名，或切换为授权所有可用域名。"
+            if str(exc) == "empty selected domain grants"
+            else "提交的密钥配置无效。"
+        )
+        edit_form = _api_key_edit_form_values(
+            current_api_key,
+            {
+                "name": name,
+                "description": (form.get("description") or [""])[-1],
+                "kind": kind,
+                "status": status_value,
+                "scopes": scopes,
+                "domain_grant_mode": domain_grant_mode,
+                "domain_ids": domain_ids,
+                "mailbox_patterns": mailbox_patterns_raw,
+                "allow_header": _form_bool((form.get("allow_header") or [None])[-1]),
+                "allow_query": _form_bool((form.get("allow_query") or [None])[-1]),
+                "rate_limit_per_min": (form.get("rate_limit_per_min") or ["3600"])[-1],
+                "allowed_ip_cidrs": allowed_ip_cidrs_raw,
+                "expires_at": expires_at or "",
+            },
+        )
+        return _render(
+            request,
+            "admin/api_key_detail.html",
+            _api_key_edit_context(
+                request,
+                admin_or_response,
+                api_key_id,
+                error=error_message,
+                form=edit_form,
+            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    edit_form = {
+        "name": name,
+        "description": (form.get("description") or [""])[-1],
+        "kind": kind,
+        "status": status_value,
+        "scopes": scopes,
+        "domain_grant_mode": domain_grant_mode,
+        "domain_ids": domain_ids,
+        "mailbox_patterns": mailbox_patterns_raw,
+        "allow_header": _form_bool((form.get("allow_header") or [None])[-1]),
+        "allow_query": _form_bool((form.get("allow_query") or [None])[-1]),
+        "rate_limit_per_min": str(rate_limit_per_min),
+        "allowed_ip_cidrs": allowed_ip_cidrs_raw,
+        "expires_at": expires_at or "",
+    }
+
+    if not name:
+        return _render(
+            request,
+            "admin/api_key_detail.html",
+            _api_key_edit_context(
+                request,
+                admin_or_response,
+                api_key_id,
+                error="名称不能为空。",
+                form=_api_key_edit_form_values(current_api_key, edit_form),
+            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    try:
+        await request.app.state.runtime.api_keys.update_key(
+            api_key_id,
+            name=name,
+            description=_parse_nullable_text((form.get("description") or [""])[-1]),
+            kind=kind,
+            status=status_value,
+            scopes=scopes,
+            domain_ids=domain_ids,
+            mailbox_patterns=_parse_csv_values(mailbox_patterns_raw),
+            allow_header=edit_form["allow_header"],
+            allow_query=edit_form["allow_query"],
+            rate_limit_per_min=rate_limit_per_min,
+            allowed_ip_cidrs=_parse_csv_values(allowed_ip_cidrs_raw),
+            expires_at=expires_at,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        return _render(
+            request,
+            "admin/api_key_detail.html",
+            _api_key_edit_context(
+                request,
+                admin_or_response,
+                api_key_id,
+                error=str(exc),
+                form=_api_key_edit_form_values(current_api_key, edit_form),
+            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    return RedirectResponse(f"/admin/api-keys/{api_key_id}?updated=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/admin/api-keys/{api_key_id}/revoke")
@@ -980,6 +1234,9 @@ async def settings_page(
     cleared_messages: int = Query(default=0, ge=0),
     cleared_mailboxes: int = Query(default=0, ge=0),
     cleared_sessions: int = Query(default=0, ge=0),
+    database_size_before_bytes: int = Query(default=0, ge=0),
+    database_size_after_bytes: int = Query(default=0, ge=0),
+    database_vacuumed: int = Query(default=0, ge=0, le=1),
     password_changed: int = Query(default=0, ge=0, le=1),
 ) -> Response:
     admin_or_response = await _require_admin(request)
@@ -996,6 +1253,9 @@ async def settings_page(
                 "messages": cleared_messages,
                 "mailboxes": cleared_mailboxes,
                 "smtp_sessions": cleared_sessions,
+                "database_size_before_bytes": database_size_before_bytes,
+                "database_size_after_bytes": database_size_after_bytes,
+                "database_vacuumed": database_vacuumed,
             } if mail_cleared else None,
             password_changed=bool(password_changed),
         ),
@@ -1084,6 +1344,9 @@ async def clear_mail_store(request: Request) -> Response:
             f"?mail_cleared=1&cleared_messages={result['messages']}"
             f"&cleared_mailboxes={result['mailboxes']}"
             f"&cleared_sessions={result['smtp_sessions']}"
+            f"&database_size_before_bytes={result.get('database_size_before_bytes', 0)}"
+            f"&database_size_after_bytes={result.get('database_size_after_bytes', 0)}"
+            f"&database_vacuumed={result.get('database_vacuumed', 0)}"
         ),
         status_code=status.HTTP_303_SEE_OTHER,
     )

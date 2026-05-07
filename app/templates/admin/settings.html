@@ -192,6 +192,9 @@
   {% if mail_clear_result %}
     <div class="settings-alert">
       已清除 {{ mail_clear_result.messages }} 封邮件、{{ mail_clear_result.mailboxes }} 个邮箱记录和 {{ mail_clear_result.smtp_sessions }} 个近期网络会话。
+      {% if mail_clear_result.database_vacuumed %}
+        数据库已压缩：{{ cn_bytes(mail_clear_result.database_size_before_bytes) }} → {{ cn_bytes(mail_clear_result.database_size_after_bytes) }}。
+      {% endif %}
     </div>
   {% endif %}
 
@@ -260,7 +263,7 @@
       <p class="eyebrow">危险操作</p>
       <h2 style="margin-bottom: 0.5rem;">清除所有邮件</h2>
       <p class="muted" style="margin: 0;">
-        清除所有已接收邮件、投递记录、附件记录、邮箱记录和近期网络会话，并删除 raw、text、html、attachments、manifests 中的邮件文件。域名、管理员、API 密钥和审计日志会保留。
+        清除所有已接收邮件、投递记录、附件记录、邮箱记录和近期网络会话，并删除 raw、text、html、attachments、manifests 中的邮件文件，同时压缩 SQLite 数据库。域名、管理员、API 密钥和审计日志会保留。
       </p>
       <div class="mail-stat-row" aria-label="当前邮件数据">
         <div class="mail-stat">

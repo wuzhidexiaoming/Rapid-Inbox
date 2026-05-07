@@ -98,6 +98,7 @@ _ACTION_LABELS = {
     "messages.reparse": "重新解析邮件",
     "settings.update": "更新系统设置",
     "api_keys.create": "创建 API 密钥",
+    "api_keys.update": "更新 API 密钥",
     "api_keys.revoke": "吊销 API 密钥",
 }
 
@@ -124,6 +125,23 @@ def cn_text(value: Any, default: str = "无") -> str:
     if isinstance(value, str):
         return value if value.strip() else default
     return str(value)
+
+
+def cn_bytes(value: Any, default: str = "0 B") -> str:
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return default
+    if size < 0:
+        return default
+    units = ("B", "KB", "MB", "GB", "TB")
+    unit_index = 0
+    while size >= 1024 and unit_index < len(units) - 1:
+        size /= 1024
+        unit_index += 1
+    if unit_index == 0:
+        return f"{int(size)} {units[unit_index]}"
+    return f"{size:.1f} {units[unit_index]}"
 
 
 def _coerce_datetime(value: Any) -> datetime | None:
@@ -222,6 +240,7 @@ def register_template_helpers(templates: Any) -> None:
         admin_product_name=ADMIN_PRODUCT_NAME,
         cn_bool=cn_bool,
         cn_text=cn_text,
+        cn_bytes=cn_bytes,
         cn_datetime=cn_datetime,
         cn_time=cn_time,
         cn_admin_role=cn_admin_role,
