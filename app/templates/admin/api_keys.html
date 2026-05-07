@@ -3,485 +3,484 @@
 
 {% block head %}
 <style>
-  .form-grid {
-    display: grid;
-    gap: 1.5rem;
-  }
-  
-  .two-up {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  }
-  
-  .form-section {
-    margin-top: 1.5rem;
-    margin-bottom: 2rem;
-  }
-
   .key-reveal {
-    background: rgba(16, 185, 129, 0.05);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    border-radius: 0.75rem;
-    padding: 2.5rem 2rem;
-    margin-bottom: 2rem;
-    text-align: center;
-    box-shadow: 0 0 40px rgba(16, 185, 129, 0.1);
     position: relative;
-    overflow: hidden;
+    padding: 24px 28px;
+    margin-bottom: 24px;
+    background: linear-gradient(135deg, rgba(235, 242, 230, 0.85) 0%, var(--bg-elevated) 100%);
+    border: 1px solid rgba(79, 125, 74, 0.32);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xs);
   }
-
-  .key-reveal::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; height: 3px;
-    background: var(--success);
-  }
-
-  .key-value-box {
+  .key-reveal__head {
     display: flex;
     align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .key-reveal__head-icon {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
     justify-content: center;
-    gap: 1rem;
-    background: rgba(0,0,0,0.4);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    border-radius: 0.5rem;
-    padding: 1rem 1.5rem;
-    margin: 1.5rem auto;
-    max-width: 600px;
-  }
-
-  .key-value {
-    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
-    font-size: 1.15rem;
-    color: var(--success);
-    word-break: break-all;
-    margin: 0;
-  }
-
-  .copy-btn {
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--success);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s;
-  }
-
-  .copy-btn:hover {
+    border-radius: 10px;
     background: var(--success);
     color: #fff;
   }
+  .key-reveal__head h3 {
+    margin: 0;
+    color: var(--success-strong);
+    font-size: 1rem;
+  }
+  .key-reveal__head p {
+    margin: 2px 0 0;
+    color: var(--text-secondary);
+    font-size: 0.86rem;
+  }
+  .key-value-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-elevated);
+    border: 1px solid rgba(79, 125, 74, 0.32);
+    border-radius: 10px;
+  }
+  .key-value {
+    flex: 1;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    color: var(--success-strong);
+    word-break: break-all;
+  }
+  .copy-btn {
+    background: var(--success);
+    color: #fff;
+    border: 1px solid var(--success);
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.82rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .copy-btn:hover { background: var(--success-strong); border-color: var(--success-strong); }
 
-  .choice-grid {
+  .scope-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-    margin-top: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
   }
 
   .choice-card {
     display: flex;
-    gap: 0.85rem;
+    gap: 10px;
     align-items: flex-start;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.03);
+    padding: 12px 14px;
+    background: var(--bg-elevated);
     border: 1px solid var(--border);
-    border-radius: 0.75rem;
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: border-color 0.15s ease, background 0.15s ease;
   }
-
   .choice-card:hover {
-    border-color: var(--primary);
-    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent);
+    background: var(--accent-faint);
   }
-
-  .choice-card input[type="checkbox"],
-  .choice-card input[type="radio"] {
-    width: 1.1rem;
-    height: 1.1rem;
-    margin: 0.15rem 0 0;
-    accent-color: var(--primary);
-    flex: 0 0 auto;
+  .choice-card:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-faint);
   }
+  .choice-card input { margin: 2px 0 0; flex-shrink: 0; accent-color: var(--accent); }
+  .choice-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .choice-title { color: var(--text); font-weight: 600; font-size: 0.9rem; line-height: 1.3; }
+  .choice-desc { color: var(--text-muted); font-size: 0.82rem; line-height: 1.5; }
 
-  .choice-grid--compact {
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  }
-
-  .choice-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    min-width: 0;
-  }
-
-  .choice-title {
-    color: var(--text);
-    font-weight: 600;
-    line-height: 1.3;
-  }
-
-  .choice-desc {
-    color: var(--muted);
-    font-size: 0.86rem;
-    line-height: 1.45;
-  }
-
-  .scope-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+  .domain-mode-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
 
   .domain-dropdown {
-    margin-top: 0.75rem;
+    margin-top: 10px;
     border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    background: var(--bg-elevated);
     overflow: hidden;
   }
-
-  .domain-dropdown[open] {
-    border-color: var(--primary);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  }
-
+  .domain-dropdown[open] { border-color: var(--accent); }
   .domain-dropdown summary {
     list-style: none;
     cursor: pointer;
-    padding: 1rem 1.1rem;
+    padding: 12px 14px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 12px;
     color: var(--text);
     font-weight: 600;
+    font-size: 0.9rem;
   }
-
-  .domain-dropdown summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .domain-dropdown__hint {
-    color: var(--muted);
-    font-size: 0.86rem;
-    font-weight: 500;
-  }
-
-  .domain-dropdown__chevron {
-    color: var(--muted);
-    transition: transform 0.2s ease;
-  }
-
-  .domain-dropdown[open] .domain-dropdown__chevron {
-    transform: rotate(180deg);
-  }
-
+  .domain-dropdown summary::-webkit-details-marker { display: none; }
+  .domain-dropdown__hint { color: var(--text-muted); font-size: 0.84rem; font-weight: 500; margin-left: 6px; }
+  .domain-dropdown__chevron { color: var(--text-muted); transition: transform 0.2s ease; }
+  .domain-dropdown[open] .domain-dropdown__chevron { transform: rotate(180deg); }
   .domain-dropdown__panel {
-    border-top: 1px solid var(--border);
-    padding: 1rem;
-    max-height: 18rem;
+    border-top: 1px solid var(--border-faint);
+    padding: 12px;
+    max-height: 22rem;
     overflow-y: auto;
+    background: var(--bg-subtle);
+  }
+
+  .key-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border-faint);
+    transition: background 0.15s ease, padding 0.15s ease;
+  }
+  .key-card:hover {
+    background: var(--accent-faint);
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .key-card__head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .key-card__name {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 1.08rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .key-card__id {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+  }
+  .key-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    font-size: 0.83rem;
+    color: var(--text-muted);
+  }
+  .key-card__meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .key-card__pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .key-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  @media (max-width: 720px) {
+    .key-card { grid-template-columns: 1fr; }
+    .domain-mode-row { grid-template-columns: 1fr; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-  {% if error %}
-    <div class="notice" data-aos="fade-down">{{ error }}</div>
-  {% endif %}
+<header class="page-header">
+  <div>
+    <p class="eyebrow">访问控制</p>
+    <h1>API 密钥</h1>
+    <p class="page-header__lede">创建访问令牌用于系统集成，支持细粒度的作用域、域名与邮箱规则限制。</p>
+  </div>
+</header>
 
-  {% if created_api_key %}
-    <section class="key-reveal" data-aos="zoom-in" data-aos-duration="600">
-      <h2 style="color: var(--success); margin-bottom: 0.5rem;">API 密钥创建成功</h2>
-      <p style="color: var(--muted); font-size: 0.95rem;">请立即保存这串密钥明文。出于安全原因，页面刷新后将永远不再完整展示。</p>
-      
-      <div class="key-value-box">
-        <code class="key-value" id="raw-api-key">{{ created_api_key.plain_text }}</code>
-        <button class="copy-btn" onclick="copyApiKey()">复制</button>
+{% if error %}
+  <div class="notice"><i data-lucide="alert-circle"></i><span>{{ error }}</span></div>
+{% endif %}
+
+{% if created_api_key %}
+  <section class="key-reveal">
+    <div class="key-reveal__head">
+      <span class="key-reveal__head-icon"><i data-lucide="check"></i></span>
+      <div>
+        <h3>API 密钥创建成功 · {{ created_api_key.name }}</h3>
+        <p>请立即保存这串密钥明文。出于安全原因，页面刷新后将永远不再完整展示。</p>
       </div>
-      <p style="color: var(--text); font-weight: 600;">名称：{{ created_api_key.name }}</p>
-      <a class="button button--ghost" href="/admin/api-keys/{{ created_api_key.id }}">编辑权限和授权</a>
-    </section>
-
-    <script>
-      function copyApiKey() {
-        const keyText = document.getElementById('raw-api-key').textContent;
-        navigator.clipboard.writeText(keyText).then(() => {
-          const btn = document.querySelector('.copy-btn');
-          const originalText = btn.textContent;
-          btn.textContent = '已复制！';
-          btn.style.background = 'var(--success)';
-          btn.style.color = '#fff';
-          setTimeout(() => {
-            btn.textContent = originalText;
-            btn.style.background = 'rgba(16, 185, 129, 0.15)';
-            btn.style.color = 'var(--success)';
-          }, 2000);
-        });
-      }
-    </script>
-  {% endif %}
-
-  <section class="card" data-aos="fade-up">
-    <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
-      <h2 style="margin: 0 0 0.5rem 0;">新增 API 密钥</h2>
-      <p class="muted" style="margin: 0; font-size: 0.95rem;">创建访问令牌用于系统集成，支持细粒度的作用域、域名与邮箱规则限制。</p>
     </div>
-
-    <form method="post" action="/admin/api-keys">
-      <div class="form-grid two-up">
-        <label>
-          <span style="color: var(--muted); font-size: 0.9rem;">密钥名称</span>
-          <input type="text" name="name" value="{{ create_form.name }}" required />
-        </label>
-        
-        <label>
-          <span style="color: var(--muted); font-size: 0.9rem;">类型</span>
-          <select name="kind">
-            <option value="admin" {% if create_form.kind == "admin" %}selected{% endif %}>管理员级别</option>
-            <option value="service" {% if create_form.kind == "service" %}selected{% endif %}>服务级别</option>
-            <option value="public" {% if create_form.kind == "public" %}selected{% endif %}>公开访问</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="form-section">
-        <span style="display: block; color: var(--muted); font-size: 0.9rem;">作用域权限</span>
-        <p class="muted" style="margin: 0.35rem 0 0;">请直接勾选此密钥应具备的能力，不再支持手动填写作用域文本。</p>
-        <div class="choice-grid">
-          {% for scope in available_scopes %}
-            <label class="choice-card">
-              <input type="checkbox" name="scopes" value="{{ scope.value }}" {% if scope.value in create_form.scopes %}checked{% endif %} />
-              <span class="choice-copy">
-                <span class="choice-title">{{ scope.label }}</span>
-                <span class="choice-desc">{{ scope.description }}</span>
-              </span>
-            </label>
-          {% endfor %}
-        </div>
-      </div>
-
-      <div class="form-section">
-        <span style="display: block; color: var(--muted); font-size: 0.9rem;">授权域名</span>
-        <p class="muted" style="margin: 0.35rem 0 0;">选择“授权所有可用域名”时，此密钥可访问所有当前和后续新增的可用域名。</p>
-        <div class="choice-grid choice-grid--compact">
-          <label class="choice-card">
-            <input
-              type="radio"
-              name="domain_grant_mode"
-              value="all"
-              data-domain-mode
-              {% if create_form.domain_grant_mode != "selected" %}checked{% endif %}
-            />
-            <span class="choice-copy">
-              <span class="choice-title">授权所有可用域名</span>
-              <span class="choice-desc">覆盖所有当前域名，并自动覆盖后续新增的可用域名。</span>
-            </span>
-          </label>
-          <label class="choice-card">
-            <input
-              type="radio"
-              name="domain_grant_mode"
-              value="selected"
-              data-domain-mode
-              {% if create_form.domain_grant_mode == "selected" %}checked{% endif %}
-            />
-            <span class="choice-copy">
-              <span class="choice-title">仅授权选中的域名</span>
-              <span class="choice-desc">只允许访问下方勾选的已接入域名。</span>
-            </span>
-          </label>
-        </div>
-        {% if available_domains %}
-          <details class="domain-dropdown" data-domain-selector {% if create_form.domain_grant_mode == "selected" %}open{% endif %}>
-            <summary>
-              <span>
-                选择授权域名
-                <span class="domain-dropdown__hint" data-domain-summary>
-                  {% if create_form.domain_grant_mode == "selected" and create_form.domain_ids %}
-                    已选择 {{ create_form.domain_ids | length }} 个域名
-                  {% elif create_form.domain_grant_mode == "selected" %}
-                    请选择域名
-                  {% else %}
-                    全部可用域名
-                  {% endif %}
-                </span>
-              </span>
-              <span class="domain-dropdown__chevron">⌄</span>
-            </summary>
-            <div class="domain-dropdown__panel">
-              <div class="choice-grid">
-                {% for domain in available_domains %}
-                  <label class="choice-card">
-                    <input
-                      type="checkbox"
-                      name="domain_ids"
-                      value="{{ domain.id }}"
-                      data-domain-id
-                      {% if (domain.id ~ '') in create_form.domain_ids %}checked{% endif %}
-                    />
-                    <span class="choice-copy">
-                      <span class="choice-title">{{ domain.root_domain_ascii }}</span>
-                      <span class="choice-desc">域名 ID：{{ domain.id }}</span>
-                    </span>
-                  </label>
-                {% endfor %}
-              </div>
-            </div>
-          </details>
-        {% else %}
-          <div class="empty-state" style="margin-top: 0.75rem;">
-            <p>当前还没有已接入域名。选择全部域名后，后续新增的可用域名会自动覆盖。</p>
-          </div>
-        {% endif %}
-      </div>
-      
-      <div class="form-section">
-        <label>
-          <span style="color: var(--muted); font-size: 0.9rem;">邮箱匹配规则</span>
-          <input type="text" name="mailbox_patterns" value="{{ create_form.mailbox_patterns }}" placeholder="可选：逗号分隔的规则，如 *@adb.com" />
-        </label>
-        <p class="muted" style="margin: 0.5rem 0 0; font-size: 0.85rem;">邮箱规则留空表示不按邮箱限制；域名未勾选时表示全部域名。</p>
-      </div>
-
-      <div class="button-row" style="justify-content: flex-end;">
-        <button class="button button--primary" type="submit" style="padding: 0.75rem 2rem;">生成密钥</button>
-      </div>
-    </form>
-  </section>
-
-  <section class="card" data-aos="fade-up" data-aos-delay="100" style="margin-top: 2rem;">
-    <div style="margin-bottom: 1.5rem;">
-      <h2 style="margin: 0 0 0.5rem 0;">现有密钥列表</h2>
+    <div class="key-value-box">
+      <code class="key-value" id="raw-api-key">{{ created_api_key.plain_text }}</code>
+      <button class="copy-btn" onclick="copyApiKey()">
+        <i data-lucide="copy" style="width: 13px; height: 13px;"></i>复制
+      </button>
     </div>
-
-    {% if api_keys %}
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>名称与前缀</th>
-              <th>类型</th>
-              <th>状态</th>
-              <th>作用域</th>
-              <th>限制规则</th>
-              <th>最近使用</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for api_key in api_keys %}
-              <tr>
-                <td>
-                  <div class="stack-meta">
-                    <strong style="color: var(--text);">{{ api_key.name }}</strong>
-                    <span class="muted" style="font-family: monospace; font-size: 0.85rem;">{{ api_key.public_id }}</span>
-                  </div>
-                </td>
-                <td>
-                  <span class="pill pill--neutral" style="font-size: 0.8rem;">{{ cn_api_key_kind(api_key.kind) }}</span>
-                </td>
-                <td>
-                  <span class="pill {% if api_key.status == 'active' %}pill--success{% elif api_key.status == 'revoked' %}pill--danger{% else %}pill--neutral{% endif %}">
-                    {{ cn_api_key_status(api_key.status) }}
-                  </span>
-                </td>
-                <td>
-                  {% if api_key.scopes %}
-                    <div class="scope-pills">
-                      {% for scope in api_key.scopes.split(', ') %}
-                        <span class="pill pill--neutral" style="font-size: 0.75rem;">{{ cn_api_key_scope(scope) }}</span>
-                      {% endfor %}
-                    </div>
-                  {% else %}
-                    <span class="muted" style="font-size: 0.85rem;">未分配作用域</span>
-                  {% endif %}
-                </td>
-                <td>
-                  <div class="stack-meta" style="font-size: 0.85rem;">
-                    {% if api_key.domain_count > 0 %}
-                      <span style="color: var(--text);">{{ api_key.domain_count }} 个域名</span>
-                    {% else %}
-                      <span style="color: var(--text);">全部域名（含后续新增）</span>
-                    {% endif %}
-                    {% if api_key.mailbox_count > 0 %}
-                      <span style="color: var(--text);">{{ api_key.mailbox_count }} 条邮箱规则</span>
-                    {% else %}
-                      <span class="muted">未限制邮箱规则</span>
-                    {% endif %}
-                  </div>
-                </td>
-                <td class="muted" style="font-size: 0.85rem;">{{ cn_datetime(api_key.last_used_at, default="从未使用") }}</td>
-                <td>
-                  {% if api_key.status == 'active' %}
-                    <form method="post" action="/admin/api-keys/{{ api_key.id }}/revoke" style="margin: 0;">
-                      <input type="hidden" name="limit" value="{{ pagination.limit }}" />
-                      <input type="hidden" name="offset" value="{{ pagination.offset }}" />
-                      <div class="button-row">
-                        <a class="button button--ghost" href="/admin/api-keys/{{ api_key.id }}" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">编辑</a>
-                        <button class="button button--danger" type="submit" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">吊销</button>
-                      </div>
-                    </form>
-                  {% else %}
-                    <a class="button button--ghost" href="/admin/api-keys/{{ api_key.id }}" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">编辑</a>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      <div class="pagination-panel">
-        <div class="pagination-summary">
-          当前第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页，显示 {{ pagination.start_index }} - {{ pagination.end_index }}，共 {{ pagination.total_count }} 个密钥
-        </div>
-        {{ pagination_nav(pagination) }}
-      </div>
-    {% else %}
-      <div class="empty-state">
-        <p>还没有创建任何 API 密钥</p>
-      </div>
-    {% endif %}
+    <div style="margin-top: 14px;">
+      <a class="button button--ghost button--sm" href="/admin/api-keys/{{ created_api_key.id }}">
+        <i data-lucide="settings-2"></i>编辑权限和授权
+      </a>
+    </div>
   </section>
 
   <script>
-    (() => {
-      const summary = document.querySelector('[data-domain-summary]');
-      const domainInputs = Array.from(document.querySelectorAll('input[data-domain-id]'));
-      const modeInputs = Array.from(document.querySelectorAll('input[data-domain-mode]'));
-      const selector = document.querySelector('[data-domain-selector]');
-      if (!summary || domainInputs.length === 0 || modeInputs.length === 0) {
-        return;
-      }
-
-      const renderSummary = () => {
-        const mode = modeInputs.find((input) => input.checked)?.value || 'all';
-        const selectedMode = mode === 'selected';
-        for (const input of domainInputs) {
-          input.disabled = !selectedMode;
-        }
-        if (selector && !selectedMode) {
-          selector.open = false;
-        }
-        const selectedCount = domainInputs.filter((input) => input.checked).length;
-        if (!selectedMode) {
-          summary.textContent = '全部可用域名';
-          return;
-        }
-        summary.textContent = selectedCount > 0 ? `已选择 ${selectedCount} 个域名` : '请选择域名';
-      };
-
-      for (const input of domainInputs) {
-        input.addEventListener('change', renderSummary);
-      }
-      for (const input of modeInputs) {
-        input.addEventListener('change', renderSummary);
-      }
-
-      renderSummary();
-    })();
+    function copyApiKey() {
+      const keyText = document.getElementById('raw-api-key').textContent;
+      navigator.clipboard.writeText(keyText).then(() => {
+        const btn = document.querySelector('.copy-btn');
+        const original = btn.innerHTML;
+        btn.textContent = '已复制！';
+        setTimeout(() => { btn.innerHTML = original; if (window.lucide) window.lucide.createIcons(); }, 1800);
+      });
+    }
   </script>
+{% endif %}
+
+<section class="doc-section" id="key-list">
+  <header class="doc-section__intro">
+    <p class="eyebrow">现有密钥</p>
+    <h2>密钥清单 · 共 {{ pagination.total_count }} 个</h2>
+    <p>已创建的所有 API 密钥及其作用域、限速和最近使用情况。</p>
+  </header>
+
+  {% if api_keys %}
+    <ul class="list-flow" style="border-top: 0;">
+      {% for api_key in api_keys %}
+        <li class="key-card">
+          <div style="min-width: 0;">
+            <div class="key-card__head">
+              <h3 class="key-card__name">{{ api_key.name }}</h3>
+              <span class="pill pill--neutral pill--plain">{{ cn_api_key_kind(api_key.kind) }}</span>
+              <span class="pill {% if api_key.status == 'active' %}pill--success{% elif api_key.status == 'revoked' %}pill--danger{% else %}pill--neutral{% endif %}">
+                {{ cn_api_key_status(api_key.status) }}
+              </span>
+            </div>
+            <span class="key-card__id">{{ api_key.public_id }}</span>
+            <div class="key-card__meta" style="margin-top: 8px;">
+              {% if api_key.domain_count > 0 %}
+                <span><i data-lucide="globe" style="width: 13px; height: 13px;"></i>{{ api_key.domain_count }} 个域名</span>
+              {% else %}
+                <span><i data-lucide="globe" style="width: 13px; height: 13px;"></i>全部域名</span>
+              {% endif %}
+              {% if api_key.mailbox_count > 0 %}
+                <span><i data-lucide="inbox" style="width: 13px; height: 13px;"></i>{{ api_key.mailbox_count }} 条邮箱规则</span>
+              {% else %}
+                <span><i data-lucide="inbox" style="width: 13px; height: 13px;"></i>未限制邮箱规则</span>
+              {% endif %}
+              <span><i data-lucide="clock-3" style="width: 13px; height: 13px;"></i>最近使用 {{ cn_datetime(api_key.last_used_at, default="从未使用") }}</span>
+            </div>
+            {% if api_key.scopes %}
+              <div class="key-card__pills">
+                {% for scope in api_key.scopes.split(', ') %}
+                  <span class="chip">{{ cn_api_key_scope(scope) }}</span>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          <div class="key-card__actions">
+            {% if api_key.status == 'active' %}
+              <form method="post" action="/admin/api-keys/{{ api_key.id }}/revoke" style="margin: 0; display: flex; gap: 6px;">
+                <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+                <input type="hidden" name="offset" value="{{ pagination.offset }}" />
+                <a class="button button--subtle button--sm" href="/admin/api-keys/{{ api_key.id }}">
+                  <i data-lucide="settings-2"></i>编辑
+                </a>
+                <button class="button button--danger button--sm" type="submit">
+                  <i data-lucide="x-circle"></i>吊销
+                </button>
+              </form>
+            {% else %}
+              <a class="button button--subtle button--sm" href="/admin/api-keys/{{ api_key.id }}">
+                <i data-lucide="settings-2"></i>编辑
+              </a>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="pagination-panel">
+      <span class="pagination-summary">
+        第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页 · 显示 {{ pagination.start_index }} - {{ pagination.end_index }} · 共 {{ pagination.total_count }} 个密钥
+      </span>
+      {{ pagination_nav(pagination) }}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <span class="empty-state__icon"><i data-lucide="key-round"></i></span>
+      <h3>还没有创建任何 API 密钥</h3>
+      <p>使用下方表单生成第一个密钥。</p>
+    </div>
+  {% endif %}
+</section>
+
+<section class="doc-section" id="new-key">
+  <header class="doc-section__intro">
+    <p class="eyebrow">新建</p>
+    <h2>新增 API 密钥</h2>
+    <p>请直接勾选此密钥应具备的能力，不再支持手动填写作用域文本。</p>
+  </header>
+
+  <form method="post" action="/admin/api-keys" class="doc-section__body">
+    <div class="form-grid form-grid--two">
+      <label>
+        <span>密钥名称</span>
+        <input type="text" name="name" value="{{ create_form.name }}" required />
+      </label>
+      <label>
+        <span>类型</span>
+        <select name="kind">
+          <option value="admin" {% if create_form.kind == "admin" %}selected{% endif %}>管理员级别</option>
+          <option value="service" {% if create_form.kind == "service" %}selected{% endif %}>服务级别</option>
+          <option value="public" {% if create_form.kind == "public" %}selected{% endif %}>公开访问</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="margin-top: 24px;">
+      <p style="margin: 0 0 4px; color: var(--text); font-size: 0.95rem; font-weight: 600;">作用域权限</p>
+      <p style="margin: 0 0 12px; color: var(--text-muted); font-size: 0.85rem;">勾选此密钥应具备的能力。</p>
+      <div class="scope-grid">
+        {% for scope in available_scopes %}
+          <label class="choice-card">
+            <input type="checkbox" name="scopes" value="{{ scope.value }}" {% if scope.value in create_form.scopes %}checked{% endif %} />
+            <span class="choice-copy">
+              <span class="choice-title">{{ scope.label }}</span>
+              <span class="choice-desc">{{ scope.description }}</span>
+            </span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top: 24px;">
+      <p style="margin: 0 0 4px; color: var(--text); font-size: 0.95rem; font-weight: 600;">授权域名</p>
+      <p style="margin: 0 0 12px; color: var(--text-muted); font-size: 0.85rem;">选择"授权所有可用域名"时，此密钥可访问所有当前和后续新增的可用域名。</p>
+      <div class="domain-mode-row">
+        <label class="choice-card">
+          <input
+            type="radio"
+            name="domain_grant_mode"
+            value="all"
+            data-domain-mode
+            {% if create_form.domain_grant_mode != "selected" %}checked{% endif %}
+          />
+          <span class="choice-copy">
+            <span class="choice-title">授权所有可用域名</span>
+            <span class="choice-desc">覆盖所有当前域名，并自动覆盖后续新增的可用域名。</span>
+          </span>
+        </label>
+        <label class="choice-card">
+          <input
+            type="radio"
+            name="domain_grant_mode"
+            value="selected"
+            data-domain-mode
+            {% if create_form.domain_grant_mode == "selected" %}checked{% endif %}
+          />
+          <span class="choice-copy">
+            <span class="choice-title">仅授权选中的域名</span>
+            <span class="choice-desc">只允许访问下方勾选的已接入域名。</span>
+          </span>
+        </label>
+      </div>
+
+      {% if available_domains %}
+        <details class="domain-dropdown" data-domain-selector {% if create_form.domain_grant_mode == "selected" %}open{% endif %}>
+          <summary>
+            <span>
+              选择授权域名
+              <span class="domain-dropdown__hint" data-domain-summary>
+                {% if create_form.domain_grant_mode == "selected" and create_form.domain_ids %}
+                  已选择 {{ create_form.domain_ids | length }} 个域名
+                {% elif create_form.domain_grant_mode == "selected" %}
+                  请选择域名
+                {% else %}
+                  全部可用域名
+                {% endif %}
+              </span>
+            </span>
+            <svg class="domain-dropdown__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
+          <div class="domain-dropdown__panel">
+            <div class="scope-grid">
+              {% for domain in available_domains %}
+                <label class="choice-card">
+                  <input
+                    type="checkbox"
+                    name="domain_ids"
+                    value="{{ domain.id }}"
+                    data-domain-id
+                    {% if (domain.id ~ '') in create_form.domain_ids %}checked{% endif %}
+                  />
+                  <span class="choice-copy">
+                    <span class="choice-title">{{ domain.root_domain_ascii }}</span>
+                    <span class="choice-desc">域名 ID：{{ domain.id }}</span>
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
+      {% else %}
+        <div class="empty-state" style="margin-top: 12px;">
+          <p>当前还没有已接入域名。选择全部域名后，后续新增的可用域名会自动覆盖。</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div style="margin-top: 24px;">
+      <label>
+        <span>邮箱匹配规则</span>
+        <input type="text" name="mailbox_patterns" value="{{ create_form.mailbox_patterns }}" placeholder="可选：逗号分隔的规则，如 *@adb.com" />
+      </label>
+      <p style="margin: 8px 0 0; color: var(--text-muted); font-size: 0.84rem;">邮箱规则留空表示不按邮箱限制；域名未勾选时表示全部域名。</p>
+    </div>
+
+    <div class="action-bar">
+      <span class="action-bar__hint">明文密钥仅在创建后展示一次，请立即妥善保存。</span>
+      <div class="action-bar__buttons">
+        <button class="button button--primary" type="submit">
+          <i data-lucide="key"></i>生成密钥
+        </button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<script>
+  (() => {
+    const summary = document.querySelector('[data-domain-summary]');
+    const domainInputs = Array.from(document.querySelectorAll('input[data-domain-id]'));
+    const modeInputs = Array.from(document.querySelectorAll('input[data-domain-mode]'));
+    const selector = document.querySelector('[data-domain-selector]');
+    if (!summary || domainInputs.length === 0 || modeInputs.length === 0) return;
+
+    const renderSummary = () => {
+      const mode = modeInputs.find((input) => input.checked)?.value || 'all';
+      const selectedMode = mode === 'selected';
+      for (const input of domainInputs) input.disabled = !selectedMode;
+      if (selector && !selectedMode) selector.open = false;
+      const selectedCount = domainInputs.filter((input) => input.checked).length;
+      if (!selectedMode) { summary.textContent = '全部可用域名'; return; }
+      summary.textContent = selectedCount > 0 ? `已选择 ${selectedCount} 个域名` : '请选择域名';
+    };
+
+    for (const input of domainInputs) input.addEventListener('change', renderSummary);
+    for (const input of modeInputs) input.addEventListener('change', renderSummary);
+    renderSummary();
+  })();
+</script>
 {% endblock %}

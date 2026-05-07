@@ -2,176 +2,266 @@
 
 {% block head %}
 <style>
-  .welcome-banner {
-    background: var(--surface-soft);
-    border: 1px solid rgba(59, 130, 246, 0.2);
-    border-radius: 1rem;
-    padding: 2rem;
-    margin-bottom: 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1.5rem;
+  .dash-greeting {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 24px;
+    padding-bottom: 26px;
+    border-bottom: 1px solid var(--border-faint);
+    margin-bottom: 32px;
   }
-  
-  .welcome-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin: 0 0 0.5rem 0;
-    color: var(--text);
+  .dash-eyebrow-time {
+    margin: 0 0 6px;
+    color: var(--text-muted);
+    font-size: 0.86rem;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+  .dash-headline {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 2.4rem;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .dash-headline em {
+    color: var(--accent-strong);
+    font-style: italic;
+    font-weight: 600;
   }
 
-  .metric-grid {
+  .featured-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2.5rem;
+    grid-template-columns: 1.25fr repeat(3, 1fr);
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-elevated);
+    margin-bottom: 38px;
+    box-shadow: var(--shadow-xs);
   }
-  
-  .metric-card {
-    padding: 1.5rem;
+  .featured-stats__cell {
+    padding: 22px 24px;
+    border-right: 1px solid var(--border-faint);
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    position: relative;
-    overflow: hidden;
+    gap: 6px;
+    min-width: 0;
   }
-
-  .metric-card::after {
-    content: '';
-    position: absolute;
-    right: -20px;
-    bottom: -20px;
-    width: 100px;
-    height: 100px;
-    background: var(--primary-soft);
-    opacity: 0.5;
-    pointer-events: none;
+  .featured-stats__cell:last-child { border-right: 0; }
+  .featured-stats__cell--lead {
+    background: linear-gradient(135deg, rgba(247, 236, 227, 0.7) 0%, transparent 70%);
   }
-  
-  .metric-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
+  .featured-stats__label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
-
-  .metric-icon {
-    color: var(--muted);
-  }
-  
-  .metric-value {
+  .featured-stats__value {
+    font-family: var(--font-serif);
+    font-weight: 600;
     font-size: 2.5rem;
-    font-weight: 800;
-    margin: 0.5rem 0;
-    letter-spacing: 0;
+    line-height: 1.05;
     color: var(--text);
+    letter-spacing: -0.02em;
   }
-  
-  .dashboard-columns {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-    gap: 2rem;
+  .featured-stats__cell:not(.featured-stats__cell--lead) .featured-stats__value {
+    font-size: 1.75rem;
+  }
+  .featured-stats__hint {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
   }
 
-  .list-item-hover {
-    transition: background 0.2s, padding-left 0.2s;
+  .activity-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 48px;
   }
-  
-  .list-item-hover:hover {
-    background: rgba(255, 255, 255, 0.03);
-    padding-left: 1.25rem;
+  .activity-block {
+    display: grid;
+    gap: 14px;
+  }
+  .activity-block__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-faint);
+  }
+  .activity-block__head h3 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .activity-block__head a {
+    color: var(--accent-strong);
+    font-size: 0.84rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .activity-block__head a:hover { color: var(--accent); }
+
+  .feed {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .feed-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-faint);
+    transition: padding 0.15s ease, background 0.15s ease;
+  }
+  .feed-row:last-child { border-bottom: 0; }
+  .feed-row:hover {
+    background: var(--accent-faint);
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .feed-row__primary {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+  .feed-row__primary a, .feed-row__primary strong {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.96rem;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .feed-row__primary a:hover { color: var(--accent-strong); }
+  .feed-row__primary span {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .feed-empty {
+    padding: 36px 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+
+  @media (max-width: 1100px) {
+    .featured-stats { grid-template-columns: 1fr 1fr; }
+    .featured-stats__cell:nth-child(2) { border-right: 0; }
+    .featured-stats__cell { border-bottom: 1px solid var(--border-faint); }
+    .featured-stats__cell:nth-last-child(-n+2) { border-bottom: 0; }
+    .activity-grid { grid-template-columns: 1fr; gap: 28px; }
+  }
+  @media (max-width: 640px) {
+    .dash-greeting { grid-template-columns: 1fr; align-items: start; }
+    .dash-headline { font-size: 1.8rem; }
+    .featured-stats { grid-template-columns: 1fr; }
+    .featured-stats__cell { border-right: 0; border-bottom: 1px solid var(--border-faint); }
+    .featured-stats__cell:last-child { border-bottom: 0; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-
-<div class="welcome-banner" data-aos="fade-down">
+<header class="dash-greeting">
   <div>
-    <h2 class="welcome-title">欢迎回来, {{ admin.display_name or admin.username }}</h2>
-    <p class="muted" style="margin: 0;">系统的实时状态和近期活动已为您准备就绪。</p>
+    <p class="dash-eyebrow-time">控制台 · {{ admin_product_name }}</p>
+    <h1 class="dash-headline">
+      下午好，<em>{{ admin.display_name or admin.username }}</em>
+    </h1>
+    <p class="page-header__lede">这里汇总了系统当前的运行状态、最近接收到的邮件以及域名活动。</p>
   </div>
-  <div class="button-row">
+  <div class="page-header__actions">
     <a href="/admin/domains" class="button button--primary">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.2rem;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-      新建域名
+      <i data-lucide="plus"></i>新建域名
+    </a>
+    <a href="/admin/api-keys" class="button button--ghost">
+      <i data-lucide="key-round"></i>创建密钥
+    </a>
+    <a href="/admin/live" class="button button--subtle">
+      <i data-lucide="activity"></i>实时监控
     </a>
   </div>
-</div>
+</header>
 
-<div class="metric-grid">
+<section class="featured-stats" aria-label="系统主要指标">
   {% for item in stats %}
-    <div class="card metric-card" data-aos="fade-up" data-aos-delay="{{ loop.index0 * 100 }}">
-      <div class="metric-header">
-        <span class="eyebrow" style="margin: 0; color: var(--muted);">{{ item.label }}</span>
-        <svg class="metric-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-      </div>
-      <div class="metric-value">{{ item.value }}</div>
-      <p class="muted" style="margin: 0; font-size: 0.85rem; color: var(--primary);">{{ item.hint }}</p>
+    <div class="featured-stats__cell {% if loop.first %}featured-stats__cell--lead{% endif %}">
+      <span class="featured-stats__label">{{ item.label }}</span>
+      <span class="featured-stats__value">{{ item.value }}</span>
+      <span class="featured-stats__hint">{{ item.hint }}</span>
     </div>
   {% endfor %}
-</div>
+</section>
 
-<div class="dashboard-columns">
-  <div class="card" data-aos="fade-up" data-aos-delay="200" style="padding: 1.5rem 0;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 1.5rem;">
-      <h3 style="margin: 0; font-size: 1.1rem;">近期接入域名</h3>
-      <a href="/admin/domains" class="button button--ghost" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">查看全部</a>
-    </div>
-    
+<section class="activity-grid">
+  <div class="activity-block">
+    <header class="activity-block__head">
+      <h3>近期接入域名</h3>
+      <a href="/admin/domains">
+        全部域名<i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+      </a>
+    </header>
     {% if recent_domains %}
-      <ul class="stack" style="gap: 0;">
+      <ul class="feed">
         {% for domain in recent_domains %}
-          <li class="stack-row list-item-hover" style="border: none; border-radius: 0; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem;">
-            <div class="stack-meta">
-              <a href="/admin/domains/{{ domain.id }}" style="font-size: 1rem; font-weight: 600;">{{ domain.root_domain_ascii }}</a>
-              <span class="muted" style="font-size: 0.8rem;">{{ cn_datetime(domain.created_at) }}</span>
+          <li class="feed-row">
+            <div class="feed-row__primary">
+              <a href="/admin/domains/{{ domain.id }}">{{ domain.root_domain_ascii }}</a>
+              <span>接入于 {{ cn_datetime(domain.created_at) }}</span>
             </div>
-            <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+            <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}">
               {{ "已启用" if domain.is_active else "未启用" }}
             </span>
           </li>
         {% endfor %}
       </ul>
     {% else %}
-      <div class="empty-state" style="margin: 0 1.5rem; border: 1px dashed var(--border);">
-        <p>暂无域名数据</p>
-      </div>
+      <div class="feed-empty">暂无域名记录。</div>
     {% endif %}
   </div>
 
-  <div class="card" data-aos="fade-up" data-aos-delay="300" style="padding: 1.5rem 0;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 1.5rem;">
-      <h3 style="margin: 0; font-size: 1.1rem;">最新接收邮件</h3>
-      <a href="/admin/messages" class="button button--ghost" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">查看全部</a>
-    </div>
-
+  <div class="activity-block">
+    <header class="activity-block__head">
+      <h3>最新接收邮件</h3>
+      <a href="/admin/messages">
+        全部邮件<i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+      </a>
+    </header>
     {% if recent_messages %}
-      <ul class="stack" style="gap: 0;">
+      <ul class="feed">
         {% for message in recent_messages %}
-          <li class="stack-row list-item-hover" style="border: none; border-radius: 0; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem;">
-            <div class="stack-meta" style="max-width: 65%;">
-              <strong style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-size: 0.95rem;">
-                {{ message.subject or "（无主题）" }}
-              </strong>
-              <span class="muted" style="font-size: 0.8rem;">发件人: {{ message.from_addr or "未知" }}</span>
+          <li class="feed-row">
+            <div class="feed-row__primary">
+              <strong>{{ message.subject or "（无主题）" }}</strong>
+              <span>来自 {{ message.from_addr or "未知发件人" }}</span>
             </div>
-            <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+            <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}">
               {{ cn_parse_status(message.parse_status) }}
             </span>
           </li>
         {% endfor %}
       </ul>
     {% else %}
-      <div class="empty-state" style="margin: 0 1.5rem; border: 1px dashed var(--border);">
-        <p>暂无邮件数据</p>
-      </div>
+      <div class="feed-empty">暂无邮件记录。</div>
     {% endif %}
   </div>
-</div>
+</section>
 {% endblock %}

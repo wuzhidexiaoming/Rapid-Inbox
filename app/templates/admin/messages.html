@@ -3,191 +3,121 @@
 
 {% block head %}
 <style>
-  .message-row {
-    transition: background 0.2s, transform 0.2s;
-  }
-  
-  .message-row:hover {
-    background: rgba(255, 255, 255, 0.02);
-  }
-
-  .subject-col {
-    max-width: 350px;
-    vertical-align: middle;
-  }
-  
-  .subject-text {
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-weight: 600;
-    color: var(--text);
-    font-size: 1.05rem;
-    margin-bottom: 0.3rem;
-  }
-  
-  .sender-text {
-    font-size: 0.85rem;
-    color: var(--muted);
-  }
-
-  .recipient-text {
-    font-size: 0.85rem;
-    color: var(--muted);
-    margin-top: 0.2rem;
-    line-height: 1.5;
-    word-break: break-word;
-  }
-  
-  .parse-error-text {
-    color: #fca5a5;
-    font-size: 0.8rem;
-    margin-top: 0.4rem;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    width: fit-content;
-    max-width: 100%;
-  }
-
-  .meta-badge {
+  .inbox-row__error {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    padding: 0.25rem 0.6rem;
-    background: rgba(255, 255, 255, 0.05);
+    gap: 4px;
+    padding: 2px 8px;
+    margin-top: 4px;
+    background: var(--danger-soft);
+    color: var(--danger-strong);
     border-radius: 6px;
-    font-size: 0.8rem;
-    color: var(--muted);
+    font-size: 0.78rem;
     font-weight: 500;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  
-  .meta-badge-success {
-    background: rgba(16, 185, 129, 0.1);
-    color: var(--success);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-  }
-  
-  .meta-badge-primary {
-    background: rgba(59, 130, 246, 0.1);
-    color: #60a5fa;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+  .inbox-row__attachments {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--success-strong);
+    font-size: 0.82rem;
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="card" data-aos="fade-up">
-  <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
-    <h2 style="margin: 0 0 0.5rem 0;">最近接收的邮件</h2>
-    <p class="muted" style="margin: 0; font-size: 0.95rem;">全局查看系统收入的所有邮件记录，快速检查主题、发件人、解析状态及附件挂载情况。</p>
+<header class="page-header">
+  <div>
+    <p class="eyebrow">邮件</p>
+    <h1>邮件记录</h1>
+    <p class="page-header__lede">全局查看系统收入的所有邮件记录，快速检查主题、发件人、解析状态及附件挂载情况。</p>
   </div>
+</header>
 
-  <form method="get" action="/admin/messages" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
-    <input type="text" name="q" value="{{ filters.q }}" placeholder="主题、发件人或收件人" />
+<form method="get" action="/admin/messages" class="filter-bar">
+  <input type="text" name="q" value="{{ filters.q }}" placeholder="搜索主题、发件人或收件人" class="filter-bar__search" />
+  <span class="filter-bar__chip">
     <select name="parse_status">
       <option value="">全部解析状态</option>
       <option value="pending" {% if filters.parse_status == "pending" %}selected{% endif %}>解析中</option>
       <option value="parsed" {% if filters.parse_status == "parsed" %}selected{% endif %}>已解析</option>
       <option value="failed" {% if filters.parse_status == "failed" %}selected{% endif %}>解析失败</option>
     </select>
+  </span>
+  <span class="filter-bar__chip">
     <select name="mailbox_id">
       <option value="">全部邮箱</option>
       {% for mailbox in mailboxes %}
         <option value="{{ mailbox.id }}" {% if filters.mailbox_id == (mailbox.id ~ '') %}selected{% endif %}>{{ mailbox.address_canonical }}</option>
       {% endfor %}
     </select>
-    <input type="hidden" name="limit" value="{{ pagination.limit }}" />
-    <div class="button-row">
-      <button class="button button--primary" type="submit">筛选</button>
-      <a class="button button--ghost" href="/admin/messages">清除</a>
-    </div>
-  </form>
+  </span>
+  <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+  <button class="button button--primary button--sm" type="submit">
+    <i data-lucide="filter"></i>筛选
+  </button>
+  <a class="button button--ghost button--sm" href="/admin/messages">清除</a>
+</form>
 
-  {% if messages %}
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>邮件主题 / 发件人</th>
-            <th>解析状态</th>
-            <th>内容概况</th>
-            <th>接收时间</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for message in messages %}
-            <tr class="message-row">
-              <td class="subject-col">
-                <a class="subject-text" href="/admin/messages/{{ message.id }}" title="{{ message.subject or '（无主题）' }}">
-                  {{ message.subject or "（无主题）" }}
-                </a>
-                <div class="sender-text">来自: {{ message.from_addr or "未知发件人" }}</div>
-                <div class="recipient-text" title="{{ message.recipients or '未知收件人' }}">
-                  收件人: {{ message.recipients or "未知收件人" }}
-                </div>
-                
-                {% if message.parse_error %}
-                  <div class="parse-error-text" title="{{ message.parse_error }}">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                      <line x1="12" y1="9" x2="12" y2="13"></line>
-                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                    </svg>
-                    解析异常: {{ message.parse_error }}
-                  </div>
-                {% endif %}
-              </td>
-              <td style="vertical-align: middle;">
-                <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}" style="font-size: 0.75rem;">
-                  {{ cn_parse_status(message.parse_status) }}
-                </span>
-              </td>
-              <td style="vertical-align: middle;">
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                  {% if message.has_attachments %}
-                    <span class="meta-badge meta-badge-success">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                      {{ message.attachment_count }} 附件
-                    </span>
-                  {% else %}
-                    <span class="meta-badge">无附件</span>
-                  {% endif %}
-                  
-                  <span class="meta-badge meta-badge-primary">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
-                    {{ message.delivery_count }} 投递
-                  </span>
-                </div>
-              </td>
-              <td class="muted" style="vertical-align: middle; font-size: 0.9rem; font-family: monospace;">
-                {{ cn_datetime(message.received_at) }}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div class="pagination-panel">
-      <div class="pagination-summary">
-        当前第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页，显示 {{ pagination.start_index }} - {{ pagination.end_index }}，共 {{ pagination.total_count }} 封邮件
-      </div>
-      {{ pagination_nav(pagination) }}
-    </div>
-  {% else %}
-    <div class="empty-state" data-aos="zoom-in" data-aos-delay="100">
-      <div style="font-size: 3rem; margin-bottom: 1rem;">📬</div>
-      <h3 style="margin-bottom: 0.5rem; font-size: 1.25rem;">暂无邮件记录</h3>
-      <p class="muted">当系统接收到新的 SMTP 邮件时，这里会自动出现。</p>
-    </div>
-  {% endif %}
-</section>
+{% if messages %}
+  <ul class="inbox">
+    {% for message in messages %}
+      <li class="inbox-row">
+        <span class="inbox-row__avatar">
+          {% if message.from_addr %}
+            {{ (message.from_addr | string)[0] | upper }}
+          {% else %}
+            <i data-lucide="mail"></i>
+          {% endif %}
+        </span>
+        <div class="inbox-row__body">
+          <div class="inbox-row__head">
+            <a class="inbox-row__subject" href="/admin/messages/{{ message.id }}" title="{{ message.subject or '（无主题）' }}">
+              {{ message.subject or "（无主题）" }}
+            </a>
+            <span class="inbox-row__time">{{ cn_datetime(message.received_at) }}</span>
+          </div>
+          <span class="inbox-row__meta">
+            <strong style="color: var(--text-secondary); font-weight: 600;">{{ message.from_addr or "未知发件人" }}</strong>
+            <span style="color: var(--text-faint);">·</span>
+            <span>收件人: {{ message.recipients or "未知收件人" }}</span>
+          </span>
+          {% if message.parse_error %}
+            <span class="inbox-row__error" title="{{ message.parse_error }}">
+              <i data-lucide="alert-triangle" style="width: 11px; height: 11px;"></i>解析异常: {{ message.parse_error }}
+            </span>
+          {% endif %}
+        </div>
+        <div class="inbox-row__tail">
+          <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}">
+            {{ cn_parse_status(message.parse_status) }}
+          </span>
+          {% if message.has_attachments %}
+            <span class="inbox-row__attachments">
+              <i data-lucide="paperclip" style="width: 12px; height: 12px;"></i>{{ message.attachment_count }}
+            </span>
+          {% endif %}
+          <span class="chip">{{ message.delivery_count }} 投递</span>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <div class="pagination-panel">
+    <span class="pagination-summary">
+      第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页 · 显示 {{ pagination.start_index }} - {{ pagination.end_index }} · 共 {{ pagination.total_count }} 封邮件
+    </span>
+    {{ pagination_nav(pagination) }}
+  </div>
+{% else %}
+  <div class="empty-state">
+    <span class="empty-state__icon"><i data-lucide="mail"></i></span>
+    <h3>暂无邮件记录</h3>
+    <p>当系统接收到新的 SMTP 邮件时，这里会自动出现。</p>
+  </div>
+{% endif %}
 {% endblock %}

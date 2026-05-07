@@ -3,77 +3,215 @@
 
 {% block head %}
 <style>
-  .custom-checkbox-label {
-    display: inline-flex;
+  .mailbox-hero {
+    display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border-faint);
+    margin-bottom: 28px;
+  }
+  .mailbox-hero__avatar {
+    display: inline-flex;
+    width: 56px;
+    height: 56px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+  }
+  .mailbox-hero h1 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 1.7rem;
+    line-height: 1.18;
+    word-break: break-all;
+    letter-spacing: -0.01em;
+  }
+  .mailbox-hero__meta {
+    margin: 4px 0 0;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+  }
+
+  .toggle-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+    padding: 14px 0;
+    border-top: 1px solid var(--border-faint);
+  }
+  .toggle-row:first-of-type { border-top: 0; padding-top: 0; }
+  .toggle-row__copy strong { font-size: 0.92rem; font-weight: 600; }
+  .toggle-row__copy p { margin: 2px 0 0; color: var(--text-muted); font-size: 0.84rem; }
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-switch__slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--border-strong);
+    border-radius: 22px;
+    transition: background 0.2s ease;
+  }
+  .toggle-switch__slider::before {
+    content: '';
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 999px;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+  .toggle-switch input:checked + .toggle-switch__slider { background: var(--accent); }
+  .toggle-switch input:checked + .toggle-switch__slider::before { transform: translateX(18px); }
+
+  .delivery-row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto auto;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-faint);
+  }
+  .delivery-row:last-child { border-bottom: 0; }
+  .delivery-row code {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .delivery-row__subject a {
+    color: var(--text);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .delivery-row__subject a:hover { color: var(--accent-strong); }
+  .delivery-row__sender {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .delivery-row__time {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+  }
+
+  @media (max-width: 760px) {
+    .delivery-row { grid-template-columns: 28px minmax(0, 1fr); }
+    .delivery-row__time, .delivery-row > .pill { grid-column: 2 / -1; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="card">
-  <div class="section-title">
-    <div>
-      <p class="eyebrow">邮箱详情</p>
-      <h2>{{ mailbox.address_canonical }}</h2>
-      <p class="section-copy">域名：{{ mailbox.root_domain_ascii }}，累计 {{ mailbox.message_count }} 封当前有效投递。</p>
-    </div>
-    <a class="button button--ghost" href="/admin/mailboxes">返回邮箱列表</a>
-  </div>
+<a class="button button--subtle button--sm" href="/admin/mailboxes" style="margin-bottom: 14px;">
+  <i data-lucide="arrow-left"></i>返回邮箱列表
+</a>
 
-  <form method="post" action="/admin/mailboxes/{{ mailbox.id }}" class="button-row" style="justify-content: flex-start; margin-bottom: 1rem;">
+<header class="mailbox-hero">
+  <span class="mailbox-hero__avatar">{{ mailbox.address_canonical[0] | upper }}</span>
+  <div style="flex: 1; min-width: 0;">
+    <p class="eyebrow" style="margin-bottom: 4px;">邮箱详情</p>
+    <h1>{{ mailbox.address_canonical }}</h1>
+    <p class="mailbox-hero__meta">
+      域名 <strong style="color: var(--text);">{{ mailbox.root_domain_ascii }}</strong> · 累计 <strong style="color: var(--text);">{{ mailbox.message_count }}</strong> 封当前有效投递
+    </p>
+  </div>
+</header>
+
+<section class="doc-section">
+  <header class="doc-section__intro">
+    <p class="eyebrow">访问控制</p>
+    <h2>公开开关</h2>
+    <p>调整后请点击保存以同步至前台。</p>
+  </header>
+  <form method="post" action="/admin/mailboxes/{{ mailbox.id }}">
     <input type="hidden" name="limit" value="{{ pagination.limit }}" />
     <input type="hidden" name="offset" value="{{ pagination.offset }}" />
-    <label class="custom-checkbox-label">
-      <input type="hidden" name="public_enabled" value="0" />
-      <input type="checkbox" name="public_enabled" value="1" {% if mailbox.public_enabled %}checked{% endif %} />
-      允许公开访问
-    </label>
-    <label class="custom-checkbox-label">
-      <input type="hidden" name="is_hidden" value="0" />
-      <input type="checkbox" name="is_hidden" value="1" {% if mailbox.is_hidden %}checked{% endif %} />
-      前台隐藏
-    </label>
-    <button class="button button--primary" type="submit">保存</button>
+    <div class="toggle-row">
+      <div class="toggle-row__copy">
+        <strong>允许公开访问</strong>
+        <p>允许任何人通过 <code>/mail/{{ mailbox.address_canonical }}</code> 浏览此邮箱的邮件。</p>
+      </div>
+      <label class="toggle-switch">
+        <input type="hidden" name="public_enabled" value="0" />
+        <input type="checkbox" name="public_enabled" value="1" {% if mailbox.public_enabled %}checked{% endif %} />
+        <span class="toggle-switch__slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-row__copy">
+        <strong>前台隐藏</strong>
+        <p>启用后此邮箱在公开列表中不可见，但仍能通过完整地址访问。</p>
+      </div>
+      <label class="toggle-switch">
+        <input type="hidden" name="is_hidden" value="0" />
+        <input type="checkbox" name="is_hidden" value="1" {% if mailbox.is_hidden %}checked{% endif %} />
+        <span class="toggle-switch__slider"></span>
+      </label>
+    </div>
+    <div class="row" style="margin-top: 18px;">
+      <button class="button button--primary" type="submit">
+        <i data-lucide="save"></i>保存变更
+      </button>
+    </div>
   </form>
+</section>
+
+<section class="doc-section">
+  <header class="doc-section__intro">
+    <p class="eyebrow">投递</p>
+    <h2>投递记录</h2>
+    <p>该邮箱当前的有效投递列表，可勾选后软删除。</p>
+  </header>
 
   {% if deliveries %}
     <form method="post" action="/admin/mailboxes/{{ mailbox.id }}/delete-deliveries">
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>投递</th>
-              <th>主题 / 发件人</th>
-              <th>状态</th>
-              <th>时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for delivery in deliveries %}
-              <tr>
-                <td><input type="checkbox" name="delivery_ids" value="{{ delivery.delivery_id }}" {% if delivery.status != "active" %}disabled{% endif %} /></td>
-                <td><code>{{ delivery.delivery_id }}</code></td>
-                <td>
-                  <a href="/admin/messages/{{ delivery.message_id }}">{{ delivery.subject or "（无主题）" }}</a>
-                  <div class="muted">{{ delivery.from_addr or "未知发件人" }}</div>
-                </td>
-                <td>{{ delivery.status }} / {{ cn_parse_status(delivery.parse_status) }}</td>
-                <td>{{ cn_datetime(delivery.delivered_at) }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div style="border-top: 1px solid var(--border-faint);">
+        {% for delivery in deliveries %}
+          <div class="delivery-row">
+            <input type="checkbox" name="delivery_ids" value="{{ delivery.delivery_id }}" {% if delivery.status != "active" %}disabled{% endif %} />
+            <div class="delivery-row__subject">
+              <a href="/admin/messages/{{ delivery.message_id }}">{{ delivery.subject or "（无主题）" }}</a>
+              <p class="delivery-row__sender">{{ delivery.from_addr or "未知发件人" }} · <code>{{ delivery.delivery_id }}</code></p>
+            </div>
+            <span class="pill {% if delivery.parse_status == 'parsed' %}pill--success{% elif delivery.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}">
+              {{ cn_parse_status(delivery.parse_status) }}
+            </span>
+            <span class="delivery-row__time">{{ cn_datetime(delivery.delivered_at) }}</span>
+          </div>
+        {% endfor %}
       </div>
-      <div class="button-row" style="justify-content: space-between; margin-top: 1rem;">
-        <button class="button button--danger" type="submit" onclick="return confirm('确认软删除选中的投递？未选择时会删除该邮箱全部有效投递。')">删除选中投递</button>
+      <div class="pagination-panel">
+        <button class="button button--danger" type="submit" onclick="return confirm('确认软删除选中的投递？未选择时会删除该邮箱全部有效投递。')">
+          <i data-lucide="trash-2"></i>删除选中投递
+        </button>
         {{ pagination_nav(pagination) }}
       </div>
     </form>
   {% else %}
-    <div class="empty-state">该邮箱暂无投递记录。</div>
+    <div class="empty-state">
+      <span class="empty-state__icon"><i data-lucide="inbox"></i></span>
+      <p>该邮箱暂无投递记录。</p>
+    </div>
   {% endif %}
 </section>
 {% endblock %}

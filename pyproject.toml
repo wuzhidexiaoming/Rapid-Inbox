@@ -56,6 +56,18 @@ rapid-inbox-smtp = "app.smtp_runner:main"
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+app = [
+  "static/vendor/README.md",
+  "templates/admin/*.html",
+  "templates/public/*.html",
+  "static/vendor/aos/*",
+  "static/vendor/fonts/*",
+  "static/vendor/lucide/*",
+  "static/vendor/normalize/*",
+  "static/vendor/typed/*",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

@@ -251,6 +251,10 @@ class MessageService:
         payload.pop("headers_json", None)
         payload["deliveries"] = [dict(delivery) for delivery in deliveries]
         payload["attachments"] = [dict(attachment) for attachment in attachments]
+        payload["html_preview_srcdoc"] = ""
+        if payload["html_body"]:
+            html_body = self.rewrite_cid_references(payload["html_body"], payload["attachments"])
+            payload["html_preview_srcdoc"] = self.build_public_html_preview_document(html_body)
         return payload
 
     def get_admin_delivery_detail(self, delivery_id: str) -> dict[str, Any]:

@@ -6,96 +6,115 @@
   .audit-filter-form {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.9rem;
-    margin-bottom: 1.25rem;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 16px 18px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
   }
-  .audit-filter-field {
-    display: grid;
-    gap: 0.35rem;
-  }
-  .audit-filter-field span {
-    color: var(--muted);
+  .audit-filter-form .row { grid-column: 1 / -1; justify-content: flex-end; }
+  .audit-filter-form label { gap: 4px; }
+  .audit-filter-form label > span:first-child { font-size: 0.78rem; }
+
+  .timeline-item__action {
+    color: var(--accent-strong);
+    font-family: var(--font-mono);
     font-size: 0.86rem;
-    font-weight: 680;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .timeline-item__resource {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+  }
+  .timeline-item__resource code {
+    background: var(--bg-subtle);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.84rem;
   }
 </style>
 {% endblock %}
 
 {% block content %}
-  <section class="card">
-    <div class="section-title">
-      <div>
-        <p class="eyebrow">审计</p>
-        <h2>最近的审计事件</h2>
-        <p class="section-copy">所有关键管理动作都会在这里留下记录，便于追踪变更与排查问题。</p>
-      </div>
-    </div>
-    <form method="get" action="/admin/audit" class="audit-filter-form">
-      <label class="audit-filter-field">
-        <span>执行者</span>
-        <input type="text" name="actor" value="{{ filters.actor }}" placeholder="actor_ref 或类型" />
-      </label>
-      <label class="audit-filter-field">
-        <span>动作</span>
-        <input type="text" name="action" value="{{ filters.action }}" placeholder="例如 domains.create" />
-      </label>
-      <label class="audit-filter-field">
-        <span>资源</span>
-        <input type="text" name="resource" value="{{ filters.resource }}" placeholder="resource_ref 或类型" />
-      </label>
-      <label class="audit-filter-field">
-        <span>开始时间</span>
-        <input type="text" name="start_time" value="{{ filters.start_time }}" placeholder="2026-04-18T00:00:00Z" />
-      </label>
-      <label class="audit-filter-field">
-        <span>结束时间</span>
-        <input type="text" name="end_time" value="{{ filters.end_time }}" placeholder="2026-04-19T00:00:00Z" />
-      </label>
-      <input type="hidden" name="limit" value="{{ pagination.limit }}" />
-      <div class="button-row" style="align-self: end;">
-        <button class="button button--primary" type="submit">筛选</button>
-        <a class="button button--ghost" href="/admin/audit">清除</a>
-      </div>
-    </form>
-    {% if logs %}
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>时间</th>
-              <th>执行者</th>
-              <th>动作</th>
-              <th>资源</th>
-              <th>结果</th>
-              <th>详情</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for log in logs %}
-              <tr>
-                <td>{{ cn_datetime(log.created_at) }}</td>
-                <td>{{ cn_actor_type(log.actor_type) }}：{{ log.actor_ref or "系统" }}</td>
-                <td>{{ cn_action(log.action) }}</td>
-                <td>{{ cn_resource_type(log.resource_type) }}{% if log.resource_ref %}：{{ log.resource_ref }}{% endif %}</td>
-                <td>
-                  <span class="pill {% if log.status == 'success' %}pill--success{% else %}pill--danger{% endif %}">
-                    {{ cn_audit_status(log.status) }}
-                  </span>
-                </td>
-                <td>{{ log.details or "无" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      <div class="pagination-panel">
-        <div class="pagination-summary">
-          当前第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页，显示 {{ pagination.start_index }} - {{ pagination.end_index }}，共 {{ pagination.total_count }} 条审计记录
+<header class="page-header">
+  <div>
+    <p class="eyebrow">审计</p>
+    <h1>审计日志</h1>
+    <p class="page-header__lede">所有关键管理动作都会在这里留下记录，便于追踪变更与排查问题。</p>
+  </div>
+</header>
+
+<form method="get" action="/admin/audit" class="audit-filter-form">
+  <label>
+    <span>执行者</span>
+    <input type="text" name="actor" value="{{ filters.actor }}" placeholder="actor_ref 或类型" />
+  </label>
+  <label>
+    <span>动作</span>
+    <input type="text" name="action" value="{{ filters.action }}" placeholder="例如 domains.create" />
+  </label>
+  <label>
+    <span>资源</span>
+    <input type="text" name="resource" value="{{ filters.resource }}" placeholder="resource_ref 或类型" />
+  </label>
+  <label>
+    <span>开始时间</span>
+    <input type="text" name="start_time" value="{{ filters.start_time }}" placeholder="2026-04-18T00:00:00Z" />
+  </label>
+  <label>
+    <span>结束时间</span>
+    <input type="text" name="end_time" value="{{ filters.end_time }}" placeholder="2026-04-19T00:00:00Z" />
+  </label>
+  <input type="hidden" name="limit" value="{{ pagination.limit }}" />
+  <div class="row">
+    <a class="button button--ghost" href="/admin/audit">清除</a>
+    <button class="button button--primary" type="submit">
+      <i data-lucide="filter"></i>筛选
+    </button>
+  </div>
+</form>
+
+{% if logs %}
+  <ul class="timeline">
+    {% for log in logs %}
+      <li class="timeline-item {% if log.status == 'success' %}timeline-item--success{% else %}timeline-item--danger{% endif %}">
+        <header class="timeline-item__head">
+          <div>
+            <span class="timeline-item__action">{{ cn_action(log.action) }}</span>
+            <span class="timeline-item__resource">
+              {{ cn_resource_type(log.resource_type) }}{% if log.resource_ref %} · <code>{{ log.resource_ref }}</code>{% endif %}
+            </span>
+          </div>
+          <span class="timeline-item__when">{{ cn_datetime(log.created_at) }}</span>
+        </header>
+        <div class="timeline-item__meta">
+          <strong style="color: var(--text-secondary);">{{ cn_actor_type(log.actor_type) }}</strong>
+          <span style="color: var(--text-faint);">·</span>
+          <span>{{ log.actor_ref or "系统" }}</span>
+          <span style="color: var(--text-faint);">·</span>
+          <span class="pill {% if log.status == 'success' %}pill--success{% else %}pill--danger{% endif %}">
+            {{ cn_audit_status(log.status) }}
+          </span>
         </div>
-        {{ pagination_nav(pagination) }}
-      </div>
-    {% else %}
-      <div class="empty-state">还没有审计记录。</div>
-    {% endif %}
-  </section>
+        {% if log.details %}
+          <div class="timeline-item__detail">{{ log.details }}</div>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+
+  <div class="pagination-panel">
+    <span class="pagination-summary">
+      第 {{ pagination.current_page }} / {{ pagination.total_pages }} 页 · 显示 {{ pagination.start_index }} - {{ pagination.end_index }} · 共 {{ pagination.total_count }} 条审计记录
+    </span>
+    {{ pagination_nav(pagination) }}
+  </div>
+{% else %}
+  <div class="empty-state">
+    <span class="empty-state__icon"><i data-lucide="scroll-text"></i></span>
+    <p>还没有审计记录。</p>
+  </div>
+{% endif %}
 {% endblock %}

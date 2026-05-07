@@ -2,320 +2,510 @@
 
 {% block head %}
 <style>
-  .domain-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 2.5rem;
-  }
-  .domain-title-group {
+  .domain-name-row {
     display: flex;
     align-items: center;
-    gap: 1.25rem;
+    gap: 16px;
     flex-wrap: wrap;
-    margin-top: 1rem;
   }
-  .domain-name {
-    font-size: 2.5rem;
-    font-weight: 800;
+  .domain-name-mark {
+    display: inline-flex;
+    width: 56px;
+    height: 56px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    flex-shrink: 0;
+  }
+  .domain-name-h1 {
     margin: 0;
-    letter-spacing: 0;
-    color: var(--text);
+    font-family: var(--font-serif);
+    font-size: 2.2rem;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    word-break: break-all;
   }
-  
-  .details-grid {
+  .horiz-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-  }
-  
-  .info-group {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .info-item {
-    display: flex;
-    justify-content: space-between;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 18px;
     align-items: center;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
-  
-  .info-item:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-  
-  .info-label {
-    color: var(--muted);
+  .horiz-row + .horiz-row { border-top: 1px solid var(--border-faint); padding-top: 14px; margin-top: 14px; }
+  .horiz-row label { display: block; }
+  .horiz-row > .horiz-row__label {
+    color: var(--text-secondary);
     font-size: 0.9rem;
-    font-weight: 500;
-  }
-  
-  .info-value {
-    color: var(--text);
     font-weight: 600;
-    font-size: 0.95rem;
-    text-align: right;
   }
-  
-  .section-heading {
-    margin-bottom: 1.5rem; 
-    border-bottom: 1px solid var(--border); 
-    padding-bottom: 1rem;
-    font-size: 1.1rem;
-    color: var(--text);
+  .horiz-row > .horiz-row__hint {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 400;
+    margin-top: 3px;
   }
-  .form-grid {
+  .horiz-row__input { display: grid; gap: 6px; }
+  .toggle-row {
     display: grid;
-    gap: 1rem;
-  }
-  .two-up {
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  }
-  .checkbox-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 0.75rem;
-  }
-  .inline-check {
-    display: flex;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 18px;
     align-items: center;
-    gap: 0.5rem;
+    padding: 14px 0;
+    border-top: 1px solid var(--border-faint);
+  }
+  .toggle-row:first-of-type { border-top: 0; padding-top: 0; }
+  .toggle-row__copy strong { font-size: 0.9rem; font-weight: 600; }
+  .toggle-row__copy p { margin: 2px 0 0; color: var(--text-muted); font-size: 0.83rem; }
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-switch__slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--border-strong);
+    border-radius: 22px;
+    transition: background 0.2s ease;
+  }
+  .toggle-switch__slider::before {
+    content: '';
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 999px;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+  .toggle-switch input:checked + .toggle-switch__slider { background: var(--accent); }
+  .toggle-switch input:checked + .toggle-switch__slider::before { transform: translateX(18px); }
+
+  .toggle-row__control {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .dns-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .dns-rec {
+    display: grid;
+    grid-template-columns: 60px minmax(0, 1.2fr) minmax(0, 2fr) minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.86rem;
+  }
+  .dns-rec__type {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+  .dns-rec__name { font-family: var(--font-mono); color: var(--text); font-weight: 500; }
+  .dns-rec__value {
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    word-break: break-all;
+    overflow: hidden;
+  }
+  .dns-rec__purpose { color: var(--text-muted); }
+
+  @media (max-width: 760px) {
+    .horiz-row, .toggle-row { grid-template-columns: 1fr; gap: 8px; }
+    .toggle-row__control { justify-content: flex-start; }
+    .dns-rec { grid-template-columns: 1fr; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div data-aos="fade-up">
-  <a class="button button--ghost" href="/admin/domains" style="display: inline-flex;">← 返回域名列表</a>
-
-  <div class="domain-header">
-    <div class="domain-title-group">
-      <h1 class="domain-name">{{ domain.root_domain_ascii }}</h1>
-      <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}" style="font-size: 0.9rem; padding: 0.4rem 1rem;">
+<header class="page-header">
+  <div>
+    <a class="button button--subtle button--sm" href="/admin/domains" style="margin-bottom: 14px;">
+      <i data-lucide="arrow-left"></i>返回域名列表
+    </a>
+    <div class="domain-name-row">
+      <span class="domain-name-mark" aria-hidden="true">
+        <i data-lucide="globe"></i>
+      </span>
+      <div>
+        <p class="eyebrow" style="margin-bottom: 4px;">域名 #{{ domain.id }}</p>
+        <h1 class="domain-name-h1">{{ domain.root_domain_ascii }}</h1>
+      </div>
+    </div>
+    <div class="row" style="margin-top: 16px;">
+      <span class="pill {% if domain.is_active %}pill--success{% else %}pill--neutral{% endif %}">
         {{ "已启用" if domain.is_active else "未启用" }}
       </span>
-      <span class="pill pill--neutral" style="font-size: 0.9rem; padding: 0.4rem 1rem;">
-        DNS: {{ cn_dns_status(domain.dns_status) }}
-      </span>
+      <span class="pill pill--info">DNS · {{ cn_dns_status(domain.dns_status) }}</span>
+      {% if domain.public_web_enabled %}<span class="chip chip--success">公开 Web 已开启</span>{% endif %}
+      {% if domain.public_api_enabled %}<span class="chip chip--success">公开 API 已开启</span>{% endif %}
     </div>
   </div>
+</header>
 
-  {% if error %}
-    <div class="notice">{{ error }}</div>
-  {% endif %}
-  {% if updated %}
-    <div class="notice">域名配置已更新。</div>
-  {% endif %}
-  {% if dns_checked %}
-    <div class="notice">DNS 检查已完成并写入最新状态。</div>
-  {% endif %}
+{% if error %}
+  <div class="notice"><i data-lucide="alert-circle"></i><span>{{ error }}</span></div>
+{% endif %}
+{% if updated %}
+  <div class="notice notice--success"><i data-lucide="check-circle"></i><span>域名配置已更新。</span></div>
+{% endif %}
+{% if dns_checked %}
+  <div class="notice notice--info"><i data-lucide="info"></i><span>DNS 检查已完成并写入最新状态。</span></div>
+{% endif %}
 
-  <div class="details-grid">
-    <!-- Card 1: 访问控制 -->
-    <div class="card" data-aos="fade-up" data-aos-delay="100">
-      <h3 class="section-heading">访问控制</h3>
-      <div class="info-group">
-        <div class="info-item">
-          <span class="info-label">公开网页访问</span>
-          <span class="info-value">
+<div class="split-page">
+  <nav class="split-page__nav" aria-label="详情章节">
+    <p class="split-page__nav-label">章节</p>
+    <a href="#overview"><i data-lucide="layers"></i>概览</a>
+    <a href="#config"><i data-lucide="settings-2"></i>配置编辑</a>
+    <a href="#dns"><i data-lucide="server"></i>DNS 建议</a>
+    <a href="#mailboxes"><i data-lucide="inbox"></i>关联邮箱</a>
+    <a href="#danger"><i data-lucide="alert-triangle"></i>危险操作</a>
+  </nav>
+
+  <div class="split-page__main">
+    <section class="doc-section" id="overview">
+      <header class="doc-section__intro">
+        <p class="eyebrow">概览</p>
+        <h2>当前配置一览</h2>
+        <p>域名的访问控制、路由规则与配额信息，可在下方"配置编辑"章节同步修改。</p>
+      </header>
+      <ul class="def-list">
+        <li>
+          <span class="def-key">公开网页访问</span>
+          <span class="def-value">
             <span class="pill {% if domain.public_web_enabled %}pill--success{% else %}pill--neutral{% endif %}">
               {{ cn_bool(domain.public_web_enabled, yes="已开启", no="已关闭") }}
             </span>
           </span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">公开接口访问</span>
-          <span class="info-value">
+        </li>
+        <li>
+          <span class="def-key">公开接口访问</span>
+          <span class="def-value">
             <span class="pill {% if domain.public_api_enabled %}pill--success{% else %}pill--neutral{% endif %}">
               {{ cn_bool(domain.public_api_enabled, yes="已开启", no="已关闭") }}
             </span>
           </span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">国际化域名</span>
-          <span class="info-value">{{ domain.root_domain_unicode or domain.root_domain_ascii }}</span>
-        </div>
-      </div>
-    </div>
+        </li>
+        <li>
+          <span class="def-key">国际化域名</span>
+          <span class="def-value mono">{{ domain.root_domain_unicode or domain.root_domain_ascii }}</span>
+        </li>
+        <li>
+          <span class="def-key">接收根域邮箱</span>
+          <span class="def-value">{{ cn_bool(domain.accept_exact) }}</span>
+        </li>
+        <li>
+          <span class="def-key">接收子域邮箱</span>
+          <span class="def-value">{{ cn_bool(domain.accept_subdomains) }}</span>
+        </li>
+        <li>
+          <span class="def-key">加号寻址策略</span>
+          <span class="def-value">{{ cn_plus_addressing_mode(domain.plus_addressing_mode) }}</span>
+        </li>
+        <li>
+          <span class="def-key">区分大小写</span>
+          <span class="def-value">{{ cn_bool(domain.local_part_case_sensitive) }}</span>
+        </li>
+        <li>
+          <span class="def-key">最大邮件大小</span>
+          <span class="def-value mono">{{ domain.max_message_size_bytes }} B</span>
+        </li>
+        <li>
+          <span class="def-key">保留天数</span>
+          <span class="def-value">{{ domain.retention_days if domain.retention_days is not none else "无限制" }}</span>
+        </li>
+        <li>
+          <span class="def-key">备注说明</span>
+          <span class="def-value muted">{{ domain.notes or "—" }}</span>
+        </li>
+      </ul>
+    </section>
 
-    <!-- Card 2: 路由与收件规则 -->
-    <div class="card" data-aos="fade-up" data-aos-delay="200">
-      <h3 class="section-heading">路由规则</h3>
-      <div class="info-group">
-        <div class="info-item">
-          <span class="info-label">接收根域邮箱</span>
-          <span class="info-value">{{ cn_bool(domain.accept_exact) }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">接收子域邮箱</span>
-          <span class="info-value">{{ cn_bool(domain.accept_subdomains) }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">加号寻址策略</span>
-          <span class="info-value">{{ cn_plus_addressing_mode(domain.plus_addressing_mode) }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">区分大小写</span>
-          <span class="info-value">{{ cn_bool(domain.local_part_case_sensitive) }}</span>
-        </div>
-      </div>
-    </div>
+    <section class="doc-section" id="config">
+      <header class="doc-section__intro">
+        <p class="eyebrow">配置编辑</p>
+        <h2>修改域名配置</h2>
+        <p>修改下方任意字段后，点击底部保存按钮即可应用变更。</p>
+      </header>
 
-    <!-- Card 3: 资源与系统配置 -->
-    <div class="card" data-aos="fade-up" data-aos-delay="300">
-      <h3 class="section-heading">配额与配置</h3>
-      <div class="info-group">
-        <div class="info-item">
-          <span class="info-label">最大邮件大小</span>
-          <span class="info-value">{{ domain.max_message_size_bytes }} B</span>
+      <form method="post" action="/admin/domains/{{ domain.id }}" class="doc-section__body">
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">根域名</span>
+            <p class="horiz-row__hint">用于 SMTP MX 接收的主域，请确保 DNS 已正确解析。</p>
+          </div>
+          <div class="horiz-row__input">
+            <input type="text" name="root_domain" value="{{ form.root_domain }}" required />
+          </div>
         </div>
-        <div class="info-item">
-          <span class="info-label">保留天数</span>
-          <span class="info-value">{{ domain.retention_days if domain.retention_days is not none else "无限制" }}</span>
-        </div>
-        <div class="info-item" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; border-bottom: none;">
-          <span class="info-label">备注说明</span>
-          <span class="info-value" style="text-align: left; color: var(--muted); font-weight: normal; font-size: 0.9rem;">
-            {{ domain.notes or "暂无备注" }}
-          </span>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <div class="card" data-aos="fade-up" data-aos-delay="350">
-    <h3 class="section-heading">编辑域名配置</h3>
-    <form method="post" action="/admin/domains/{{ domain.id }}">
-      <div class="form-grid two-up">
-        <label>
-          <span class="info-label">根域名</span>
-          <input type="text" name="root_domain" value="{{ form.root_domain }}" required />
-        </label>
-        <label>
-          <span class="info-label">最大邮件大小（字节）</span>
-          <input type="number" min="1" step="1" name="max_message_size_bytes" value="{{ form.max_message_size_bytes }}" required />
-        </label>
-        <label>
-          <span class="info-label">加号寻址策略</span>
-          <select name="plus_addressing_mode">
-            <option value="keep" {% if form.plus_addressing_mode == "keep" %}selected{% endif %}>保留原样</option>
-            <option value="strip" {% if form.plus_addressing_mode == "strip" %}selected{% endif %}>去除加号标签</option>
-          </select>
-        </label>
-        <label>
-          <span class="info-label">保留天数</span>
-          <input type="number" min="1" step="1" name="retention_days" value="{{ form.retention_days }}" placeholder="可选" />
-        </label>
-      </div>
-      <div class="checkbox-grid" style="margin-top: 1rem;">
-        <label class="inline-check"><input type="hidden" name="accept_exact" value="0" /><input type="checkbox" name="accept_exact" value="1" {% if form.accept_exact %}checked{% endif %} />接收根域邮箱</label>
-        <label class="inline-check"><input type="hidden" name="accept_subdomains" value="0" /><input type="checkbox" name="accept_subdomains" value="1" {% if form.accept_subdomains %}checked{% endif %} />接收子域邮箱</label>
-        <label class="inline-check"><input type="hidden" name="public_web_enabled" value="0" /><input type="checkbox" name="public_web_enabled" value="1" {% if form.public_web_enabled %}checked{% endif %} />公开 Web</label>
-        <label class="inline-check"><input type="hidden" name="public_api_enabled" value="0" /><input type="checkbox" name="public_api_enabled" value="1" {% if form.public_api_enabled %}checked{% endif %} />公开 API</label>
-        <label class="inline-check"><input type="hidden" name="local_part_case_sensitive" value="0" /><input type="checkbox" name="local_part_case_sensitive" value="1" {% if form.local_part_case_sensitive %}checked{% endif %} />本地部分区分大小写</label>
-        <label class="inline-check"><input type="hidden" name="is_active" value="0" /><input type="checkbox" name="is_active" value="1" {% if form.is_active %}checked{% endif %} />启用域名</label>
-      </div>
-      <label style="display: block; margin-top: 1rem;">
-        <span class="info-label">备注</span>
-        <textarea name="notes">{{ form.notes }}</textarea>
-      </label>
-      <div class="button-row" style="justify-content: flex-end; margin-top: 1rem;">
-        <button class="button button--primary" type="submit">保存域名</button>
-      </div>
-    </form>
-  </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">最大邮件大小</span>
+            <p class="horiz-row__hint">单位为字节，超过该大小的邮件会被拒收。</p>
+          </div>
+          <div class="horiz-row__input">
+            <input type="number" min="1" step="1" name="max_message_size_bytes" value="{{ form.max_message_size_bytes }}" required />
+          </div>
+        </div>
 
-  <div class="card" data-aos="fade-up" data-aos-delay="360">
-    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
-      <h3 style="margin: 0;">DNS 建议与检查</h3>
-      <form method="post" action="/admin/domains/{{ domain.id }}/dns-check">
-        <button class="button button--ghost" type="submit">执行 DNS 检查</button>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">加号寻址策略</span>
+            <p class="horiz-row__hint">控制是否将 <code>user+tag@domain</code> 映射到 <code>user@domain</code>。</p>
+          </div>
+          <div class="horiz-row__input">
+            <select name="plus_addressing_mode">
+              <option value="keep" {% if form.plus_addressing_mode == "keep" %}selected{% endif %}>保留原样</option>
+              <option value="strip" {% if form.plus_addressing_mode == "strip" %}selected{% endif %}>去除加号标签</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">保留天数</span>
+            <p class="horiz-row__hint">超出天数的邮件会被清理。留空表示永久保留。</p>
+          </div>
+          <div class="horiz-row__input">
+            <input type="number" min="1" step="1" name="retention_days" value="{{ form.retention_days }}" placeholder="留空 = 永久保留" />
+          </div>
+        </div>
+
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-faint);">
+          <h3 style="margin-bottom: 14px; font-size: 0.95rem;">开关与策略</h3>
+
+          <div class="toggle-row">
+            <div class="toggle-row__copy">
+              <strong>接收根域邮箱</strong>
+              <p>允许发送给 <code>*@{{ domain.root_domain_ascii }}</code> 的邮件入站。</p>
+            </div>
+            <div class="toggle-row__control">
+              <label class="toggle-switch">
+                <input type="hidden" name="accept_exact" value="0" />
+                <input type="checkbox" name="accept_exact" value="1" {% if form.accept_exact %}checked{% endif %} />
+                <span class="toggle-switch__slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-row__copy">
+              <strong>接收子域邮箱</strong>
+              <p>允许形如 <code>user@sub.{{ domain.root_domain_ascii }}</code> 的邮件入站。</p>
+            </div>
+            <div class="toggle-row__control">
+              <label class="toggle-switch">
+                <input type="hidden" name="accept_subdomains" value="0" />
+                <input type="checkbox" name="accept_subdomains" value="1" {% if form.accept_subdomains %}checked{% endif %} />
+                <span class="toggle-switch__slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-row__copy">
+              <strong>公开 Web 访问</strong>
+              <p>允许任何人通过 <code>/mail/{address}</code> 浏览此域名下邮箱。</p>
+            </div>
+            <div class="toggle-row__control">
+              <label class="toggle-switch">
+                <input type="hidden" name="public_web_enabled" value="0" />
+                <input type="checkbox" name="public_web_enabled" value="1" {% if form.public_web_enabled %}checked{% endif %} />
+                <span class="toggle-switch__slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-row__copy">
+              <strong>公开 API 访问</strong>
+              <p>允许公开 API 查询此域名下邮箱。</p>
+            </div>
+            <div class="toggle-row__control">
+              <label class="toggle-switch">
+                <input type="hidden" name="public_api_enabled" value="0" />
+                <input type="checkbox" name="public_api_enabled" value="1" {% if form.public_api_enabled %}checked{% endif %} />
+                <span class="toggle-switch__slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-row__copy">
+              <strong>区分大小写</strong>
+              <p>启用后 <code>USER@</code> 与 <code>user@</code> 视为不同邮箱。</p>
+            </div>
+            <div class="toggle-row__control">
+              <label class="toggle-switch">
+                <input type="hidden" name="local_part_case_sensitive" value="0" />
+                <input type="checkbox" name="local_part_case_sensitive" value="1" {% if form.local_part_case_sensitive %}checked{% endif %} />
+                <span class="toggle-switch__slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-row__copy">
+              <strong>启用域名</strong>
+              <p>关闭后 SMTP 将拒收此域名下的邮件。</p>
+            </div>
+            <div class="toggle-row__control">
+              <label class="toggle-switch">
+                <input type="hidden" name="is_active" value="0" />
+                <input type="checkbox" name="is_active" value="1" {% if form.is_active %}checked{% endif %} />
+                <span class="toggle-switch__slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="horiz-row" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-faint);">
+          <div>
+            <span class="horiz-row__label">备注</span>
+            <p class="horiz-row__hint">仅作内部参考使用，不会向公众展示。</p>
+          </div>
+          <div class="horiz-row__input">
+            <textarea name="notes" placeholder="选填备注信息">{{ form.notes }}</textarea>
+          </div>
+        </div>
+
+        <div class="action-bar">
+          <span class="action-bar__hint">所有修改会立即同步到 SMTP 接收策略。</span>
+          <div class="action-bar__buttons">
+            <a class="button button--ghost" href="/admin/domains/{{ domain.id }}">放弃修改</a>
+            <button class="button button--primary" type="submit">
+              <i data-lucide="save"></i>保存域名
+            </button>
+          </div>
+        </div>
       </form>
-    </div>
-    <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>名称</th><th>类型</th><th>建议值</th><th>用途</th></tr></thead>
-        <tbody>
-          {% for record in domain.dns_recommendations %}
-            <tr>
-              <td>{{ record.name }}</td>
-              <td>{{ record.type }}</td>
-              <td><code>{{ record.value }}</code></td>
-              <td>{{ record.purpose }}</td>
-            </tr>
+    </section>
+
+    <section class="doc-section" id="dns">
+      <header class="doc-section__intro" style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+        <div>
+          <p class="eyebrow">DNS</p>
+          <h2>建议的 DNS 记录</h2>
+          <p>请按下表更新 DNS，并执行检查以同步状态到本平台。</p>
+        </div>
+        <form method="post" action="/admin/domains/{{ domain.id }}/dns-check" style="margin: 0;">
+          <button class="button button--ghost" type="submit">
+            <i data-lucide="refresh-cw"></i>执行 DNS 检查
+          </button>
+        </form>
+      </header>
+      <div class="dns-grid">
+        {% for record in domain.dns_recommendations %}
+          <div class="dns-rec">
+            <span class="dns-rec__type">{{ record.type }}</span>
+            <span class="dns-rec__name">{{ record.name }}</span>
+            <span class="dns-rec__value"><code>{{ record.value }}</code></span>
+            <span class="dns-rec__purpose">{{ record.purpose }}</span>
+          </div>
+        {% endfor %}
+      </div>
+      {% if domain.dns_last_checked_at %}
+        <p class="muted" style="margin-top: 12px; font-size: 0.86rem;">
+          最近检查 {{ cn_datetime(domain.dns_last_checked_at) }} · 状态 {{ cn_dns_status(domain.dns_status) }}
+        </p>
+      {% endif %}
+    </section>
+
+    <section class="doc-section" id="mailboxes">
+      <header class="doc-section__intro">
+        <p class="eyebrow">邮箱</p>
+        <h2>关联邮箱列表</h2>
+        <p>该域名下当前已记录的邮箱概况。点击邮箱即可查看投递明细。</p>
+      </header>
+      {% if mailboxes %}
+        <ul class="list-flow">
+          {% for mailbox in mailboxes %}
+            <li class="list-row">
+              <div class="list-row__primary">
+                <a class="list-row__title" href="/admin/mailboxes/{{ mailbox.id }}">{{ mailbox.address_canonical }}</a>
+                <div class="list-row__sub">
+                  <span><i data-lucide="mail" style="width: 13px; height: 13px;"></i>{{ mailbox.message_count }} 封</span>
+                  <span><i data-lucide="clock-3" style="width: 13px; height: 13px;"></i>最近 {{ cn_datetime(mailbox.latest_message_at, default="无") }}</span>
+                  {% if mailbox.notes %}<span><i data-lucide="bookmark" style="width: 13px; height: 13px;"></i>{{ mailbox.notes }}</span>{% endif %}
+                </div>
+              </div>
+              <div class="list-row__actions">
+                <span class="pill {% if mailbox.public_enabled %}pill--success{% else %}pill--neutral{% endif %}">
+                  {{ cn_bool(mailbox.public_enabled, yes="已公开", no="未公开") }}
+                </span>
+                {% if mailbox.is_hidden %}<span class="pill pill--warning">隐藏</span>{% endif %}
+              </div>
+            </li>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% if domain.dns_last_checked_at %}
-      <p class="muted">最近检查：{{ cn_datetime(domain.dns_last_checked_at) }}，状态：{{ cn_dns_status(domain.dns_status) }}</p>
-    {% endif %}
-  </div>
+        </ul>
+      {% else %}
+        <div class="empty-state">
+          <span class="empty-state__icon"><i data-lucide="inbox"></i></span>
+          <p>该域名下暂无任何邮箱记录</p>
+        </div>
+      {% endif %}
+    </section>
 
-  <div class="card" data-aos="fade-up" data-aos-delay="400">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-      <h3 style="margin: 0;">关联邮箱列表</h3>
-    </div>
-    
-    {% if mailboxes %}
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>邮箱地址</th>
-              <th>邮件数</th>
-              <th>最近一封</th>
-              <th>访问权限</th>
-              <th>状态</th>
-              <th>备注</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for mailbox in mailboxes %}
-              <tr>
-                <td style="font-weight: 600;">{{ mailbox.address_canonical }}</td>
-                <td>{{ mailbox.message_count }}</td>
-                <td class="muted">{{ cn_datetime(mailbox.latest_message_at, default="无记录") }}</td>
-                <td>
-                  <span class="pill {% if mailbox.public_enabled %}pill--success{% else %}pill--neutral{% endif %}">
-                    {{ cn_bool(mailbox.public_enabled, yes="已公开", no="已关闭") }}
-                  </span>
-                </td>
-                <td>
-                  <span class="pill {% if mailbox.is_hidden %}pill--warning{% else %}pill--neutral{% endif %}">
-                    {{ cn_bool(mailbox.is_hidden, yes="隐藏", no="可见") }}
-                  </span>
-                </td>
-                <td class="muted">{{ mailbox.notes or "-" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <div class="empty-state">
-        <p>该域名下暂无任何邮箱记录</p>
-      </div>
-    {% endif %}
-  </div>
-
-  <div class="card" data-aos="fade-up" data-aos-delay="450">
-    <h3 class="section-heading">删除域名</h3>
-    <p class="muted">只有没有关联邮箱、投递记录和 API 授权的域名可以直接删除。已有数据的域名建议先停用。</p>
-    <form method="post" action="/admin/domains/{{ domain.id }}/delete" onsubmit="return confirm('确认删除该域名？')">
-      <label class="inline-check" style="max-width: 320px;">
-        <input type="checkbox" name="confirm" value="delete-domain" required />
-        确认删除该域名
-      </label>
-      <div class="button-row" style="margin-top: 1rem;">
-        <button class="button button--danger" type="submit">删除域名</button>
-      </div>
-    </form>
+    <section class="doc-section" id="danger">
+      <header class="doc-section__intro">
+        <p class="eyebrow" style="color: var(--danger-strong);">危险操作</p>
+        <h2>删除域名</h2>
+        <p>只有没有关联邮箱、投递记录和 API 授权的域名可以直接删除。已有数据的域名建议先停用。</p>
+      </header>
+      <form method="post" action="/admin/domains/{{ domain.id }}/delete" onsubmit="return confirm('确认删除该域名？')">
+        <label style="display: inline-flex; gap: 8px; align-items: center; padding: 12px 14px; border: 1px solid rgba(177, 67, 67, 0.4); border-radius: 10px; background: var(--danger-soft); color: var(--danger-strong); cursor: pointer;">
+          <input type="checkbox" name="confirm" value="delete-domain" required />
+          确认删除该域名
+        </label>
+        <div class="row" style="margin-top: 16px;">
+          <button class="button button--danger" type="submit">
+            <i data-lucide="trash-2"></i>删除域名
+          </button>
+        </div>
+      </form>
+    </section>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (() => {
+    const links = document.querySelectorAll('.split-page__nav a[href^="#"]');
+    const sections = Array.from(links).map(link => document.querySelector(link.getAttribute('href')));
+    const update = () => {
+      const top = window.scrollY + 120;
+      let active = sections[0];
+      for (const section of sections) {
+        if (section && section.offsetTop <= top) active = section;
+      }
+      links.forEach(link => link.classList.toggle('is-current', active && link.getAttribute('href') === '#' + active.id));
+    };
+    document.addEventListener('scroll', update, { passive: true });
+    update();
+  })();
+</script>
 {% endblock %}

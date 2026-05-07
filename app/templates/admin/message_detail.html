@@ -1,86 +1,256 @@
 {% extends "admin/base.html" %}
 
+{% block head %}
+<style>
+  .msg-hero {
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border-faint);
+    margin-bottom: 28px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .msg-hero h1 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 1.85rem;
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    word-break: break-word;
+  }
+  .msg-hero__id {
+    margin: 4px 0 0;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.84rem;
+  }
+
+  .body-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .body-text {
+    margin: 0;
+    padding: 18px 20px;
+    background: var(--bg-subtle);
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+    color: var(--text);
+  }
+  .body-iframe {
+    width: 100%;
+    min-height: 420px;
+    border: 0;
+    background: #fff;
+    display: block;
+  }
+
+  .delivery-row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto auto;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-faint);
+  }
+  .delivery-row:last-child { border-bottom: 0; }
+  .delivery-row__mailbox a {
+    color: var(--text);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .delivery-row__mailbox a:hover { color: var(--accent-strong); }
+  .delivery-row__rcpt {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .delivery-row__time {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+  }
+
+  .attachment-card {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .attachment-card + .attachment-card { margin-top: 10px; }
+  .attachment-card__icon {
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+  }
+  .attachment-card__name {
+    color: var(--text);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .attachment-card__meta {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+  }
+
+  @media (max-width: 720px) {
+    .delivery-row { grid-template-columns: 28px minmax(0, 1fr); }
+    .delivery-row__time, .delivery-row > .pill { grid-column: 2 / -1; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="card">
-  <div class="section-title">
-    <div>
-      <p class="eyebrow">邮件详情</p>
-      <h2>{{ message.subject or "（无主题）" }}</h2>
-      <p class="section-copy">消息 ID：{{ message.id }}，接收时间：{{ cn_datetime(message.received_at) }}</p>
-    </div>
-    <div class="button-row">
-      <a class="button button--ghost" href="/admin/messages">返回列表</a>
-      <a class="button button--ghost" href="/admin/messages/{{ message.id }}/raw">下载 Raw</a>
-      {% if message.parse_status in ["pending", "failed"] %}
-        <form method="post" action="/admin/messages/{{ message.id }}/reparse">
-          <button class="button button--primary" type="submit">重新解析</button>
-        </form>
-      {% endif %}
-    </div>
-  </div>
+<a class="button button--subtle button--sm" href="/admin/messages" style="margin-bottom: 14px;">
+  <i data-lucide="arrow-left"></i>返回邮件列表
+</a>
 
-  <div class="details-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
-    <div>
-      <p class="eyebrow">发件人</p>
-      <p>{{ message.from_addr or message.envelope_from or "未知" }}</p>
-    </div>
-    <div>
-      <p class="eyebrow">解析状态</p>
-      <p>{{ cn_parse_status(message.parse_status) }}{% if message.parse_error %}：{{ message.parse_error }}{% endif %}</p>
-    </div>
-    <div>
-      <p class="eyebrow">Raw 大小</p>
-      <p>{{ cn_bytes(message.raw_size_bytes) }}</p>
-    </div>
+<header class="msg-hero">
+  <div style="min-width: 0;">
+    <p class="eyebrow">邮件详情</p>
+    <h1>{{ message.subject or "（无主题）" }}</h1>
+    <p class="msg-hero__id">消息 ID · <code>{{ message.id }}</code></p>
   </div>
+  <div class="row">
+    <a class="button button--ghost" href="/admin/messages/{{ message.id }}/raw">
+      <i data-lucide="download"></i>下载 Raw
+    </a>
+    {% if message.parse_status in ["pending", "failed"] %}
+      <form method="post" action="/admin/messages/{{ message.id }}/reparse" style="margin: 0;">
+        <button class="button button--primary" type="submit">
+          <i data-lucide="refresh-cw"></i>重新解析
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</header>
 
-  <h3>投递记录</h3>
+<section class="doc-section">
+  <header class="doc-section__intro">
+    <p class="eyebrow">概览</p>
+    <h2>邮件元信息</h2>
+  </header>
+  <ul class="def-list">
+    <li>
+      <span class="def-key">发件人</span>
+      <span class="def-value">{{ message.from_addr or message.envelope_from or "未知" }}</span>
+    </li>
+    <li>
+      <span class="def-key">接收时间</span>
+      <span class="def-value mono">{{ cn_datetime(message.received_at) }}</span>
+    </li>
+    <li>
+      <span class="def-key">解析状态</span>
+      <span class="def-value">
+        <span class="pill {% if message.parse_status == 'parsed' %}pill--success{% elif message.parse_status == 'failed' %}pill--danger{% else %}pill--warning{% endif %}">
+          {{ cn_parse_status(message.parse_status) }}
+        </span>
+        {% if message.parse_error %}
+          <span class="muted" style="margin-left: 8px; font-weight: 400;">{{ message.parse_error }}</span>
+        {% endif %}
+      </span>
+    </li>
+    <li>
+      <span class="def-key">Raw 大小</span>
+      <span class="def-value mono">{{ cn_bytes(message.raw_size_bytes) }}</span>
+    </li>
+  </ul>
+</section>
+
+<section class="doc-section">
+  <header class="doc-section__intro">
+    <p class="eyebrow">投递</p>
+    <h2>投递记录</h2>
+    <p>显示该邮件已派发到哪些邮箱。可勾选后批量软删除。</p>
+  </header>
   {% if message.deliveries %}
     <form method="post" action="/admin/messages/{{ message.id }}/delete-deliveries">
-      <div class="table-wrap">
-        <table class="table">
-          <thead><tr><th></th><th>邮箱</th><th>收件人</th><th>状态</th><th>时间</th></tr></thead>
-          <tbody>
-            {% for delivery in message.deliveries %}
-              <tr>
-                <td><input type="checkbox" name="delivery_ids" value="{{ delivery.delivery_id }}" {% if delivery.status != "active" %}disabled{% endif %} /></td>
-                <td><a href="/admin/mailboxes/{{ delivery.mailbox_id }}">{{ delivery.mailbox }}</a></td>
-                <td>{{ delivery.rcpt_to }}</td>
-                <td>{{ delivery.status }}</td>
-                <td>{{ cn_datetime(delivery.delivered_at) }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div style="border-top: 1px solid var(--border-faint);">
+        {% for delivery in message.deliveries %}
+          <div class="delivery-row">
+            <input type="checkbox" name="delivery_ids" value="{{ delivery.delivery_id }}" {% if delivery.status != "active" %}disabled{% endif %} />
+            <div class="delivery-row__mailbox">
+              <a href="/admin/mailboxes/{{ delivery.mailbox_id }}">{{ delivery.mailbox }}</a>
+              <p class="delivery-row__rcpt">{{ delivery.rcpt_to }}</p>
+            </div>
+            <span class="pill pill--neutral">{{ delivery.status }}</span>
+            <span class="delivery-row__time">{{ cn_datetime(delivery.delivered_at) }}</span>
+          </div>
+        {% endfor %}
       </div>
-      <div class="button-row" style="margin-top: 1rem;">
-        <button class="button button--danger" type="submit" onclick="return confirm('确认软删除选中的投递？未选择时会删除该邮件全部有效投递。')">删除投递</button>
+      <div class="row" style="margin-top: 14px;">
+        <button class="button button--danger" type="submit" onclick="return confirm('确认软删除选中的投递？未选择时会删除该邮件全部有效投递。')">
+          <i data-lucide="trash-2"></i>删除投递
+        </button>
       </div>
     </form>
-  {% endif %}
-
-  {% if message.attachments %}
-    <h3>附件</h3>
-    <ul class="stack">
-      {% for attachment in message.attachments %}
-        <li class="stack-row">
-          <div class="stack-meta">
-            <strong>{{ attachment.filename or attachment.safe_filename or attachment.id }}</strong>
-            <span class="muted">{{ attachment.content_type or "application/octet-stream" }} · {{ cn_bytes(attachment.size_bytes) }}</span>
-          </div>
-          <a class="button button--ghost" href="/admin/messages/{{ message.id }}/attachments/{{ attachment.id }}">下载</a>
-        </li>
-      {% endfor %}
-    </ul>
-  {% endif %}
-
-  <h3>正文</h3>
-  {% if message.text_body %}
-    <pre style="white-space: pre-wrap; word-break: break-word;">{{ message.text_body }}</pre>
-  {% elif message.html_body %}
-    <iframe sandbox srcdoc="{{ message.html_body | e }}" style="width: 100%; min-height: 360px; border: 1px solid var(--border); border-radius: 8px;"></iframe>
   {% else %}
-    <div class="empty-state">没有可展示的正文内容。</div>
+    <div class="empty-state">
+      <p>暂无投递记录。</p>
+    </div>
+  {% endif %}
+</section>
+
+{% if message.attachments %}
+  <section class="doc-section">
+    <header class="doc-section__intro">
+      <p class="eyebrow">附件</p>
+      <h2>附件 · {{ message.attachments | length }} 个</h2>
+    </header>
+    {% for attachment in message.attachments %}
+      <div class="attachment-card">
+        <span class="attachment-card__icon"><i data-lucide="paperclip"></i></span>
+        <div style="min-width: 0;">
+          <div class="attachment-card__name">{{ attachment.filename or attachment.safe_filename or attachment.id }}</div>
+          <div class="attachment-card__meta">{{ attachment.content_type or "application/octet-stream" }} · {{ cn_bytes(attachment.size_bytes) }}</div>
+        </div>
+        <a class="button button--subtle button--sm" href="/admin/messages/{{ message.id }}/attachments/{{ attachment.id }}">
+          <i data-lucide="download"></i>下载
+        </a>
+      </div>
+    {% endfor %}
+  </section>
+{% endif %}
+
+<section class="doc-section">
+  <header class="doc-section__intro">
+    <p class="eyebrow">正文</p>
+    <h2>邮件正文</h2>
+  </header>
+  {% if message.text_body %}
+    <div class="body-wrap"><pre class="body-text">{{ message.text_body }}</pre></div>
+  {% elif message.html_preview_srcdoc %}
+    <div class="body-wrap">
+      <iframe
+        sandbox
+        referrerpolicy="no-referrer"
+        srcdoc="{{ message.html_preview_srcdoc | e }}"
+        class="body-iframe"
+      ></iframe>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <p>没有可展示的正文内容。</p>
+    </div>
   {% endif %}
 </section>
 {% endblock %}

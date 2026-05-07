@@ -4,7 +4,7 @@
 <style>
   .message-page {
     display: grid;
-    gap: 18px;
+    gap: 22px;
   }
 
   .message-toolbar {
@@ -12,92 +12,102 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 12px;
   }
 
   .message-header {
-    padding: 22px;
+    padding: 28px 32px;
+    border-radius: var(--radius-xl);
+    background:
+      linear-gradient(135deg, rgba(247, 236, 227, 0.55) 0%, transparent 60%),
+      var(--bg-elevated);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-xs);
   }
 
   .message-title {
     margin: 0;
     overflow-wrap: anywhere;
-    color: var(--ink);
-    font-size: 2rem;
+    font-family: var(--font-serif);
+    font-size: 1.95rem;
     line-height: 1.18;
-    font-weight: 780;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
   }
 
   .message-meta {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 18px;
+    gap: 12px;
+    margin-top: 22px;
   }
 
   .meta-item {
     min-width: 0;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #f9fbfc;
-    padding: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
   }
 
   .meta-label {
     display: block;
     margin-bottom: 4px;
-    color: var(--muted);
-    font-size: 0.8rem;
-    font-weight: 720;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .meta-value {
     display: block;
     overflow: hidden;
-    color: var(--ink);
-    font-size: 0.93rem;
-    font-weight: 700;
+    color: var(--text);
+    font-size: 0.94rem;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
   .meta-value.mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 0.86rem;
   }
 
   .notice {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     align-items: flex-start;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 14px;
-    font-weight: 650;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.92rem;
+    font-weight: 500;
   }
+  .notice svg { flex-shrink: 0; margin-top: 2px; }
 
   .notice-warning {
-    border-color: #e6d29a;
-    background: #fff8e8;
-    color: var(--amber);
+    border-color: rgba(176, 131, 41, 0.32);
+    background: var(--warning-soft);
+    color: var(--warning-strong);
   }
-
   .notice-danger {
-    border-color: #e9bbb5;
-    background: #fff4f2;
-    color: var(--red);
+    border-color: rgba(177, 67, 67, 0.32);
+    background: var(--danger-soft);
+    color: var(--danger-strong);
   }
 
   .content-section {
-    padding: 18px;
+    padding: 22px 24px;
   }
 
   .section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 14px;
+    gap: 12px;
+    margin-bottom: 16px;
   }
 
   .section-title {
@@ -105,29 +115,30 @@
     align-items: center;
     gap: 8px;
     margin: 0;
-    color: var(--ink);
+    font-family: var(--font-serif);
     font-size: 1.05rem;
-    font-weight: 760;
+    font-weight: 600;
+    color: var(--text);
   }
 
   .text-content-box {
     overflow-x: auto;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fbfcfd;
-    color: var(--ink);
-    padding: 14px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 0.92rem;
-    line-height: 1.65;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    line-height: 1.7;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
 
   .iframe-container {
     overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     background: #fff;
   }
 
@@ -142,25 +153,25 @@
   .attachment-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 10px;
+    gap: 12px;
   }
 
   .attachment-card {
     display: grid;
     gap: 12px;
     min-width: 0;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #f9fbfc;
-    padding: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
     color: inherit;
     text-decoration: none;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
   }
-
   .attachment-card:hover {
-    border-color: var(--line-strong);
-    background: #fff;
-    box-shadow: 0 10px 22px rgba(32, 38, 45, 0.08);
+    border-color: var(--border-strong);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-sm);
   }
 
   .attachment-name {
@@ -174,7 +185,7 @@
   .attachment-name strong {
     min-width: 0;
     overflow-wrap: anywhere;
-    color: var(--ink);
+    color: var(--text);
     font-size: 0.96rem;
   }
 
@@ -182,46 +193,44 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    color: var(--muted);
+    color: var(--text-muted);
     font-size: 0.85rem;
   }
 
   .headers-wrap {
     overflow-x: auto;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
 
   .headers-table {
     width: 100%;
     border-collapse: collapse;
-    background: #fbfcfd;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--bg-elevated);
+    font-family: var(--font-mono);
     font-size: 0.84rem;
   }
 
   .headers-table th,
   .headers-table td {
-    border-bottom: 1px solid var(--line);
-    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-faint);
+    padding: 12px 14px;
     text-align: left;
     vertical-align: top;
   }
-
   .headers-table tr:last-child th,
-  .headers-table tr:last-child td {
-    border-bottom: 0;
-  }
+  .headers-table tr:last-child td { border-bottom: 0; }
 
   .headers-table th {
     width: 28%;
-    color: var(--muted-strong);
-    font-weight: 760;
+    background: var(--bg-subtle);
+    color: var(--text-muted);
+    font-weight: 600;
     overflow-wrap: anywhere;
   }
 
   .headers-table td {
-    color: var(--ink);
+    color: var(--text);
     overflow-wrap: anywhere;
   }
 
@@ -231,28 +240,13 @@
     }
   }
 
-  @media (max-width: 620px) {
-    .message-toolbar {
-      align-items: stretch;
-      flex-direction: column;
-    }
-
+  @media (max-width: 640px) {
+    .message-toolbar { flex-direction: column; align-items: stretch; }
     .message-toolbar .button-row,
-    .message-toolbar .btn {
-      width: 100%;
-    }
-
-    .message-title {
-      font-size: 1.55rem;
-    }
-
-    .message-meta {
-      grid-template-columns: 1fr;
-    }
-
-    .iframe-container iframe {
-      min-height: 460px;
-    }
+    .message-toolbar .btn { width: 100%; }
+    .message-title { font-size: 1.55rem; }
+    .message-meta { grid-template-columns: 1fr; }
+    .iframe-container iframe { min-height: 460px; }
   }
 </style>
 {% endblock %}
@@ -261,20 +255,11 @@
 <div class="message-page">
   <div class="message-toolbar">
     <a href="/mail/{{ mailbox }}" class="btn btn-secondary">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M19 12H5"></path>
-        <path d="m12 19-7-7 7-7"></path>
-      </svg>
-      返回邮箱
+      <i data-lucide="arrow-left"></i>返回邮箱
     </a>
     <div class="button-row">
       <a href="/mail/{{ mailbox }}/{{ delivery_id }}/raw" class="btn btn-primary">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <path d="M7 10l5 5 5-5"></path>
-          <path d="M12 15V3"></path>
-        </svg>
-        下载原始邮件
+        <i data-lucide="download"></i>下载原始邮件
       </a>
     </div>
   </div>
@@ -308,7 +293,7 @@
         <path d="M12 8v4"></path>
         <path d="M12 16h.01"></path>
       </svg>
-      这封邮件仍在解析中。稍后刷新页面即可看到正文、附件或网页预览。
+      <span>这封邮件仍在解析中。稍后刷新页面即可看到正文、附件或网页预览。</span>
     </div>
   {% elif parse_status == "failed" %}
     <div class="notice notice-danger">
@@ -317,7 +302,7 @@
         <path d="m15 9-6 6"></path>
         <path d="m9 9 6 6"></path>
       </svg>
-      这封邮件在解析时发生错误，部分内容可能暂时不可用。
+      <span>这封邮件在解析时发生错误，部分内容可能暂时不可用。</span>
     </div>
   {% endif %}
 

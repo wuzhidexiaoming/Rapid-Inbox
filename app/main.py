@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import Settings, default_settings
@@ -19,7 +20,8 @@ from app.smtp.server import SMTPServer
 def create_app(*, settings: Settings | None = None, embed_smtp: bool = False) -> FastAPI:
     resolved_settings = settings or default_settings(Path.cwd())
     runtime = RapidInboxRuntime(resolved_settings)
-    templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+    app_dir = Path(__file__).resolve().parent
+    templates = Jinja2Templates(directory=str(app_dir / "templates"))
     register_template_helpers(templates)
 
     @asynccontextmanager
@@ -42,6 +44,7 @@ def create_app(*, settings: Settings | None = None, embed_smtp: bool = False) ->
                 await runtime.stop()
 
     app = FastAPI(title="Rapid Inbox", lifespan=lifespan)
+    app.mount("/static", StaticFiles(directory=str(app_dir / "static")), name="static")
     app.include_router(public_views_router)
     app.include_router(public_api_router)
     app.include_router(admin_views_router)

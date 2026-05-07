@@ -2,357 +2,343 @@
 
 {% block head %}
 <style>
-  .settings-grid {
+  .runtime-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
   }
-  
-  .setting-card {
-    background: rgba(255, 255, 255, 0.02);
+  .runtime-cell {
+    padding: 16px 18px;
+    background: var(--bg-subtle);
     border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    padding: 1.5rem;
-    transition: all 0.3s ease;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
+    border-radius: 10px;
+    display: grid;
+    gap: 6px;
   }
-  
-  .setting-card:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: var(--primary);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-  }
-  
-  .setting-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-  
-  .setting-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: rgba(59, 130, 246, 0.1);
-    color: var(--primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .setting-label {
+  .runtime-cell__label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
     font-weight: 600;
-    font-size: 1.05rem;
-    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
-  
-  .setting-value {
-    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
-    font-size: 1.25rem;
+  .runtime-cell__value {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
     color: var(--text);
-    margin: 0.5rem 0;
     word-break: break-all;
   }
-  
-  .setting-hint {
-    color: var(--muted);
-    font-size: 0.85rem;
-    line-height: 1.5;
-    margin-top: auto;
-    padding-top: 1rem;
-  }
-
-  .settings-alert {
-    margin: 0 0 1rem;
-    border: 1px solid #b7dfc6;
-    border-radius: 8px;
-    background: #ecfdf3;
-    color: var(--success);
-    padding: 0.85rem 1rem;
-    font-weight: 680;
-  }
-
-  .settings-alert--error {
-    border-color: #efc4be;
-    background: #fff5f3;
-    color: var(--danger);
-  }
-
-  .security-zone {
-    margin-top: 1.5rem;
-  }
-
-  .settings-form {
-    display: grid;
-    max-width: 520px;
-    gap: 0.9rem;
-    margin-top: 1rem;
-  }
-
-  .settings-field {
-    display: grid;
-    gap: 0.4rem;
-  }
-
-  .settings-field span {
-    color: var(--muted);
-    font-size: 0.86rem;
-    font-weight: 680;
-  }
-
-  .settings-field input {
-    width: 100%;
-    min-height: 40px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-    padding: 0 0.85rem;
-  }
-
-  .danger-zone {
-    margin-top: 1.5rem;
-    border-color: #efc4be;
-  }
-
-  .danger-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 1.25rem;
-    align-items: start;
-  }
-
-  .mail-stat-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin: 1rem 0 0;
-  }
-
-  .mail-stat {
-    min-width: 120px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-soft);
-    padding: 0.75rem;
-  }
-
-  .mail-stat strong,
-  .mail-stat span {
-    display: block;
-  }
-
-  .mail-stat strong {
-    font-size: 1.2rem;
-  }
-
-  .mail-stat span {
-    color: var(--muted);
+  .runtime-cell__hint {
+    color: var(--text-muted);
     font-size: 0.82rem;
+    line-height: 1.5;
+    margin: 0;
   }
 
-  .danger-form {
+  .horiz-row {
     display: grid;
-    min-width: min(100%, 280px);
-    gap: 0.85rem;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 18px;
+    align-items: center;
+    padding: 14px 0;
+    border-top: 1px solid var(--border-faint);
+  }
+  .horiz-row:first-of-type { border-top: 0; padding-top: 0; }
+  .horiz-row__label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .horiz-row__hint {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    margin-top: 3px;
+  }
+
+  .danger-stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-subtle);
+  }
+  .danger-stat strong {
+    display: block;
+    font-family: var(--font-serif);
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: 1.05;
+  }
+  .danger-stat span {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    margin-top: 2px;
   }
 
   .danger-confirm {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.55rem;
-    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: var(--danger-soft);
+    border: 1px solid rgba(177, 67, 67, 0.4);
+    border-radius: 10px;
+    color: var(--danger-strong);
     font-size: 0.88rem;
-    line-height: 1.45;
-  }
-
-  .danger-confirm input {
-    margin-top: 0.18rem;
+    cursor: pointer;
   }
 
   @media (max-width: 760px) {
-    .danger-layout {
-      grid-template-columns: 1fr;
-    }
+    .horiz-row { grid-template-columns: 1fr; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="card" data-aos="fade-up">
-  <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
-    <h2 style="margin: 0 0 0.5rem 0;">系统运行参数</h2>
-    <p class="muted" style="margin: 0; font-size: 0.95rem;">当前环境的关键运行配置，包含接收限制与后台会话参数。</p>
+<header class="page-header">
+  <div>
+    <p class="eyebrow">系统</p>
+    <h1>系统设置</h1>
+    <p class="page-header__lede">查看运行参数、调整接收限制、修改管理员密码或清除全部邮件数据。</p>
   </div>
+</header>
 
-  {% if mail_clear_result %}
-    <div class="settings-alert">
+{% if mail_clear_result %}
+  <div class="notice notice--success">
+    <i data-lucide="check-circle"></i>
+    <span>
       已清除 {{ mail_clear_result.messages }} 封邮件、{{ mail_clear_result.mailboxes }} 个邮箱记录和 {{ mail_clear_result.smtp_sessions }} 个近期网络会话。
       {% if mail_clear_result.database_vacuumed %}
         数据库已压缩：{{ cn_bytes(mail_clear_result.database_size_before_bytes) }} → {{ cn_bytes(mail_clear_result.database_size_after_bytes) }}。
       {% endif %}
-    </div>
-  {% endif %}
+    </span>
+  </div>
+{% endif %}
 
-  {% if password_changed %}
-    <div class="settings-alert">
-      管理员密码已更新。
-    </div>
-  {% endif %}
+{% if password_changed %}
+  <div class="notice notice--success"><i data-lucide="check-circle"></i><span>管理员密码已更新。</span></div>
+{% endif %}
 
-  {% if settings_updated %}
-    <div class="settings-alert">
-      系统运行参数已更新。
-    </div>
-  {% endif %}
+{% if settings_updated %}
+  <div class="notice notice--success"><i data-lucide="check-circle"></i><span>系统运行参数已更新。</span></div>
+{% endif %}
 
-  {% if settings_error %}
-    <div class="settings-alert settings-alert--error">
-      {{ settings_error }}
-    </div>
-  {% endif %}
+{% if settings_error %}
+  <div class="notice"><i data-lucide="alert-circle"></i><span>{{ settings_error }}</span></div>
+{% endif %}
 
-  {% if force_password_change %}
-    <div class="settings-alert settings-alert--error">
-      当前账号仍在使用初始密码。请先修改管理员密码，完成后才能继续使用后台其他页面。
-    </div>
-  {% endif %}
+{% if force_password_change %}
+  <div class="notice notice--warning">
+    <i data-lucide="key-round"></i>
+    <span>当前账号仍在使用初始密码。请先修改管理员密码，完成后才能继续使用后台其他页面。</span>
+  </div>
+{% endif %}
 
-  {% if settings_items %}
-    <div class="settings-grid">
-      {% for item in settings_items %}
-        <div class="setting-card" data-aos="fade-up" data-aos-delay="{{ loop.index0 * 50 }}">
-          <div class="setting-header">
-            <div class="setting-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-              </svg>
+<div class="split-page">
+  <nav class="split-page__nav" aria-label="设置章节">
+    <p class="split-page__nav-label">章节</p>
+    <a href="#runtime"><i data-lucide="gauge"></i>运行参数</a>
+    <a href="#tuning"><i data-lucide="sliders-horizontal"></i>调整限制</a>
+    <a href="#password"><i data-lucide="key-round"></i>修改管理员密码</a>
+    <a href="#cleanup"><i data-lucide="trash-2"></i>清除邮件</a>
+  </nav>
+
+  <div class="split-page__main">
+    <section class="doc-section" id="runtime">
+      <header class="doc-section__intro">
+        <p class="eyebrow">运行参数</p>
+        <h2>当前生效配置</h2>
+        <p>这些参数会直接影响 SMTP 接收行为以及后台会话超时策略。</p>
+      </header>
+      {% if settings_items %}
+        <div class="runtime-grid">
+          {% for item in settings_items %}
+            <div class="runtime-cell">
+              <span class="runtime-cell__label">{{ item.label }}</span>
+              <span class="runtime-cell__value">{{ item.value }}</span>
+              <p class="runtime-cell__hint">{{ item.hint }}</p>
             </div>
-            <span class="setting-label">{{ item.label }}</span>
-          </div>
-          <div class="setting-value">{{ item.value }}</div>
-          <div class="setting-hint">{{ item.hint }}</div>
+          {% endfor %}
         </div>
-      {% endfor %}
-    </div>
-  {% else %}
-    <div class="empty-state">
-      <p>当前没有可展示的系统设置</p>
-    </div>
-  {% endif %}
-</section>
+      {% else %}
+        <div class="empty-state"><p>当前没有可展示的系统设置</p></div>
+      {% endif %}
+    </section>
 
-<section class="card security-zone">
-  <p class="eyebrow">运行保护</p>
-  <h2 style="margin-bottom: 0.5rem;">调整接收限制</h2>
-  <p class="muted" style="margin: 0;">这些设置会写入 system_settings，并在当前运行进程中立即生效。</p>
-  <form class="settings-form" method="post" action="/admin/settings" style="max-width: 760px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
-    <label class="settings-field">
-      <span>最大邮件大小（字节）</span>
-      <input type="number" min="1" step="1" name="max_message_size_bytes" value="{{ settings_form.max_message_size_bytes }}" required />
-    </label>
-    <label class="settings-field">
-      <span>单封邮件最大收件人数</span>
-      <input type="number" min="1" step="1" name="max_recipients_per_message" value="{{ settings_form.max_recipients_per_message }}" required />
-    </label>
-    <label class="settings-field">
-      <span>SMTP 空闲超时（秒）</span>
-      <input type="number" min="1" step="1" name="smtp_idle_timeout_seconds" value="{{ settings_form.smtp_idle_timeout_seconds }}" required />
-    </label>
-    <label class="settings-field">
-      <span>SMTP 并发连接上限</span>
-      <input type="number" min="0" step="1" name="smtp_max_concurrent_connections" value="{{ settings_form.smtp_max_concurrent_connections }}" required />
-    </label>
-    <label class="settings-field">
-      <span>每 IP 短窗口连接上限</span>
-      <input type="number" min="0" step="1" name="smtp_connection_rate_limit_count" value="{{ settings_form.smtp_connection_rate_limit_count }}" required />
-    </label>
-    <label class="settings-field">
-      <span>SMTP 连接限流窗口（秒）</span>
-      <input type="number" min="1" step="1" name="smtp_connection_rate_limit_window_seconds" value="{{ settings_form.smtp_connection_rate_limit_window_seconds }}" required />
-    </label>
-    <label class="settings-field">
-      <span>磁盘告警阈值（%）</span>
-      <input type="number" min="1" max="100" step="1" name="disk_warning_threshold_percent" value="{{ settings_form.disk_warning_threshold_percent }}" required />
-    </label>
-    <div class="button-row" style="align-self: end;">
-      <button class="button button--primary" type="submit">保存运行参数</button>
-    </div>
-  </form>
-</section>
+    <section class="doc-section" id="tuning">
+      <header class="doc-section__intro">
+        <p class="eyebrow">运行保护</p>
+        <h2>调整接收限制</h2>
+        <p>这些设置会写入 <code>system_settings</code>，并在当前运行进程中立即生效。</p>
+      </header>
+      <form method="post" action="/admin/settings">
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">最大邮件大小</span>
+            <p class="horiz-row__hint">单位为字节。超过此值的邮件会被拒收。</p>
+          </div>
+          <input type="number" min="1" step="1" name="max_message_size_bytes" value="{{ settings_form.max_message_size_bytes }}" required />
+        </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">单封邮件最大收件人数</span>
+            <p class="horiz-row__hint">超出后该封邮件会被拒收。</p>
+          </div>
+          <input type="number" min="1" step="1" name="max_recipients_per_message" value="{{ settings_form.max_recipients_per_message }}" required />
+        </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">SMTP 空闲超时（秒）</span>
+            <p class="horiz-row__hint">连接空闲超过此秒数会被服务器关闭。</p>
+          </div>
+          <input type="number" min="1" step="1" name="smtp_idle_timeout_seconds" value="{{ settings_form.smtp_idle_timeout_seconds }}" required />
+        </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">SMTP 并发连接上限</span>
+            <p class="horiz-row__hint">设为 0 表示不限制并发连接数。</p>
+          </div>
+          <input type="number" min="0" step="1" name="smtp_max_concurrent_connections" value="{{ settings_form.smtp_max_concurrent_connections }}" required />
+        </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">每 IP 短窗口连接上限</span>
+            <p class="horiz-row__hint">超过窗口阈值的 IP 会被暂时拒绝建立连接。</p>
+          </div>
+          <input type="number" min="0" step="1" name="smtp_connection_rate_limit_count" value="{{ settings_form.smtp_connection_rate_limit_count }}" required />
+        </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">SMTP 连接限流窗口（秒）</span>
+            <p class="horiz-row__hint">配合上方"每 IP 上限"计算时间窗口。</p>
+          </div>
+          <input type="number" min="1" step="1" name="smtp_connection_rate_limit_window_seconds" value="{{ settings_form.smtp_connection_rate_limit_window_seconds }}" required />
+        </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">磁盘告警阈值（%）</span>
+            <p class="horiz-row__hint">磁盘占用超过此百分比时会触发告警。</p>
+          </div>
+          <input type="number" min="1" max="100" step="1" name="disk_warning_threshold_percent" value="{{ settings_form.disk_warning_threshold_percent }}" required />
+        </div>
+        <div class="action-bar">
+          <span class="action-bar__hint">所有调整保存后立即在当前运行进程中生效。</span>
+          <div class="action-bar__buttons">
+            <button class="button button--primary" type="submit">
+              <i data-lucide="save"></i>保存运行参数
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
 
-<section class="card security-zone">
-  <p class="eyebrow">安全</p>
-  <h2 style="margin-bottom: 0.5rem;">修改管理员密码</h2>
-  <p class="muted" style="margin: 0;">更新当前登录管理员的密码。修改后请使用新密码登录。</p>
-  {% if password_error %}
-    <div class="settings-alert settings-alert--error" style="margin-top: 1rem;">
-      {{ password_error }}
-    </div>
-  {% endif %}
-  <form class="settings-form" method="post" action="/admin/settings/password">
-    <label class="settings-field">
-      <span>当前密码</span>
-      <input type="password" name="current_password" autocomplete="current-password" required />
-    </label>
-    <label class="settings-field">
-      <span>新密码</span>
-      <input type="password" name="new_password" autocomplete="new-password" minlength="8" required />
-    </label>
-    <label class="settings-field">
-      <span>确认新密码</span>
-      <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" required />
-    </label>
-    <div class="button-row">
-      <button class="button button--primary" type="submit">更新密码</button>
-    </div>
-  </form>
-</section>
+    <section class="doc-section" id="password">
+      <header class="doc-section__intro">
+        <p class="eyebrow">安全</p>
+        <h2>修改管理员密码</h2>
+        <p>更新当前登录管理员的密码。修改后请使用新密码登录。</p>
+      </header>
+      {% if password_error %}
+        <div class="notice"><i data-lucide="alert-circle"></i><span>{{ password_error }}</span></div>
+      {% endif %}
+      <form method="post" action="/admin/settings/password">
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">当前密码</span>
+            <p class="horiz-row__hint">用于校验身份。</p>
+          </div>
+          <input type="password" name="current_password" autocomplete="current-password" required />
+        </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">新密码</span>
+            <p class="horiz-row__hint">至少 8 位，建议混合字母、数字与符号。</p>
+          </div>
+          <input type="password" name="new_password" autocomplete="new-password" minlength="8" required />
+        </div>
+        <div class="horiz-row">
+          <div>
+            <span class="horiz-row__label">确认新密码</span>
+            <p class="horiz-row__hint">必须与上方新密码完全一致。</p>
+          </div>
+          <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" required />
+        </div>
+        <div class="action-bar">
+          <span class="action-bar__hint">密码更新后会保留当前会话，下次登录时使用新密码。</span>
+          <div class="action-bar__buttons">
+            <button class="button button--primary" type="submit">
+              <i data-lucide="key-round"></i>更新密码
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
 
-<section class="card danger-zone">
-  <div class="danger-layout">
-    <div>
-      <p class="eyebrow">危险操作</p>
-      <h2 style="margin-bottom: 0.5rem;">清除所有邮件</h2>
-      <p class="muted" style="margin: 0;">
-        清除所有已接收邮件、投递记录、附件记录、邮箱记录和近期网络会话，并删除 raw、text、html、attachments、manifests 中的邮件文件，同时压缩 SQLite 数据库。域名、管理员、API 密钥和审计日志会保留。
-      </p>
-      <div class="mail-stat-row" aria-label="当前邮件数据">
-        <div class="mail-stat">
+    <section class="doc-section" id="cleanup">
+      <header class="doc-section__intro">
+        <p class="eyebrow" style="color: var(--danger-strong);">危险操作</p>
+        <h2>清除所有邮件</h2>
+        <p>清除所有已接收邮件、投递记录、附件记录、邮箱记录和近期网络会话，并删除 raw、text、html、attachments、manifests 中的邮件文件，同时压缩 SQLite 数据库。域名、管理员、API 密钥和审计日志会保留。</p>
+      </header>
+
+      <div class="danger-stat-row" aria-label="当前邮件数据">
+        <div class="danger-stat">
           <strong>{{ mail_store_stats.messages }}</strong>
           <span>邮件</span>
         </div>
-        <div class="mail-stat">
+        <div class="danger-stat">
           <strong>{{ mail_store_stats.mailboxes }}</strong>
           <span>邮箱记录</span>
         </div>
-        <div class="mail-stat">
+        <div class="danger-stat">
           <strong>{{ mail_store_stats.attachments }}</strong>
           <span>附件记录</span>
         </div>
-        <div class="mail-stat">
+        <div class="danger-stat">
           <strong>{{ mail_store_stats.smtp_sessions }}</strong>
           <span>近期网络会话</span>
         </div>
       </div>
-    </div>
-    <form
-      class="danger-form"
-      method="post"
-      action="/admin/settings/clear-mail"
-      onsubmit="return confirm('确认清除所有已接收邮件、邮箱记录和近期网络会话？此操作不可恢复。')"
-    >
-      <label class="danger-confirm">
-        <input type="checkbox" name="confirm" value="clear-all-mail" required />
-        <span>我确认清除所有邮件数据和近期网络会话</span>
-      </label>
-      <button class="button button--danger" type="submit">清除所有邮件</button>
-    </form>
+
+      <form
+        method="post"
+        action="/admin/settings/clear-mail"
+        onsubmit="return confirm('确认清除所有已接收邮件、邮箱记录和近期网络会话？此操作不可恢复。')"
+      >
+        <label class="danger-confirm">
+          <input type="checkbox" name="confirm" value="clear-all-mail" required />
+          我确认清除所有邮件数据和近期网络会话
+        </label>
+        <div class="row" style="margin-top: 14px;">
+          <button class="button button--danger" type="submit">
+            <i data-lucide="trash-2"></i>清除所有邮件
+          </button>
+        </div>
+      </form>
+    </section>
   </div>
-</section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (() => {
+    const links = document.querySelectorAll('.split-page__nav a[href^="#"]');
+    const sections = Array.from(links).map(link => document.querySelector(link.getAttribute('href')));
+    const update = () => {
+      const top = window.scrollY + 120;
+      let active = sections[0];
+      for (const section of sections) {
+        if (section && section.offsetTop <= top) active = section;
+      }
+      links.forEach(link => link.classList.toggle('is-current', active && link.getAttribute('href') === '#' + active.id));
+    };
+    document.addEventListener('scroll', update, { passive: true });
+    update();
+  })();
+</script>
 {% endblock %}

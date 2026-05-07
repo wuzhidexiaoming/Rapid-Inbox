@@ -2,92 +2,143 @@
 
 {% block head %}
 <style>
-  .auth-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 65vh;
-  }
-  
-  .auth-card {
+  .login-card {
     width: 100%;
-    max-width: 420px;
-    padding: 3rem 2.5rem;
-    text-align: center;
-  }
-  
-  .auth-icon {
-    width: 48px;
-    height: 48px;
-    background: var(--surface-strong);
-    border-radius: 12px;
-    margin: 0 auto 1.5rem;
-    box-shadow: 0 8px 24px var(--primary-glow);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .auth-icon svg {
-    width: 24px;
-    height: 24px;
-    color: white;
-  }
-  
-  .form-group {
+    padding: 36px 32px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
     text-align: left;
-    margin-bottom: 1.5rem;
   }
-  
-  .auth-form {
-    margin-top: 2.5rem;
+
+  .login-card__brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
   }
-  
-  .submit-btn {
-    width: 100%;
-    padding: 0.8rem;
-    font-size: 1rem;
-    margin-top: 1rem;
+
+  .login-card__mark {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent) 0%, #d97757 100%);
+    color: #fff;
+    box-shadow: 0 12px 26px rgba(193, 95, 60, 0.22);
+  }
+
+  .login-card__brand-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .login-card__brand-title {
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .login-card__brand-subtitle {
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .login-headline {
+    font-size: 1.7rem;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
+  .login-sub {
+    color: var(--text-muted);
+    margin: 0 0 28px;
+    font-size: 0.95rem;
+  }
+
+  .login-form {
+    display: grid;
+    gap: 18px;
+  }
+
+  .login-form .button {
+    margin-top: 6px;
+    height: 44px;
+    font-size: 0.96rem;
+    font-weight: 600;
+  }
+
+  .login-foot {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-faint);
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    text-align: center;
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="auth-wrapper">
-  <div class="card auth-card" data-aos="zoom-in" data-aos-duration="800">
-    
-    <div class="auth-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7a4 4 0 00-8 0v4h8z" />
+<div class="login-card">
+  <div class="login-card__brand">
+    <span class="login-card__mark" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+        <path d="m3 7 9 7 9-7"></path>
       </svg>
-    </div>
-    
-    <h2>欢迎回来</h2>
-    <p class="muted">请登录以访问控制台</p>
-
-    {% if error %}
-      <div class="notice" role="alert" style="margin-top: 1.5rem; text-align: left;">
-        {{ error }}
-      </div>
-    {% endif %}
-
-    <form method="post" action="/admin/login" class="auth-form">
-      <div class="form-group">
-        <label>
-          用户名
-          <input name="username" type="text" value="{{ username or '' }}" autocomplete="username" autofocus required placeholder="输入管理员账号" />
-        </label>
-      </div>
-      <div class="form-group">
-        <label>
-          密码
-          <input name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
-        </label>
-      </div>
-      <button type="submit" class="button button--primary submit-btn">
-        登录
-      </button>
-    </form>
+    </span>
+    <span class="login-card__brand-text">
+      <span class="login-card__brand-title">{{ admin_product_name | default("极速收件箱") }}</span>
+      <span class="login-card__brand-subtitle">Admin Console</span>
+    </span>
   </div>
+
+  <h1 class="login-headline">欢迎回来</h1>
+  <p class="login-sub">登录后即可管理域名、邮箱以及 API 密钥。</p>
+
+  {% if error %}
+    <div class="notice" role="alert">
+      <i data-lucide="alert-triangle"></i>
+      <span>{{ error }}</span>
+    </div>
+  {% endif %}
+
+  <form method="post" action="/admin/login" class="login-form">
+    <label>
+      <span>用户名</span>
+      <input
+        name="username"
+        type="text"
+        value="{{ username or '' }}"
+        autocomplete="username"
+        autofocus
+        required
+        placeholder="输入管理员账号"
+      />
+    </label>
+    <label>
+      <span>密码</span>
+      <input
+        name="password"
+        type="password"
+        autocomplete="current-password"
+        required
+        placeholder="••••••••"
+      />
+    </label>
+    <button type="submit" class="button button--primary button--block">
+      <i data-lucide="log-in"></i>登录控制台
+    </button>
+  </form>
+
+  <p class="login-foot">登录即代表您同意按照管理规范使用本服务。</p>
 </div>
 {% endblock %}

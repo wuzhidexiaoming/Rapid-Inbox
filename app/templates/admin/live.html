@@ -3,283 +3,271 @@
 
 {% block head %}
 <style>
-  .live-dashboard {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
+  .live-stack {
+    display: grid;
+    gap: 22px;
   }
 
-  .status-bar {
+  .live-status-bar {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.03);
+    gap: 16px;
+    padding: 22px 26px;
+    background: var(--bg-elevated);
     border: 1px solid var(--border);
-    border-radius: 1rem;
-    padding: 1.5rem 2rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
   }
 
-  .status-left {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
+  .live-status-bar h2 {
+    margin: 0;
+    font-size: 1.2rem;
   }
 
-  .status-pulse {
+  .pulse {
     position: relative;
-    width: 24px;
-    height: 24px;
-    display: flex;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
-    align-items: center;
+    flex-shrink: 0;
   }
-
-  .pulse-core {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
+  .pulse__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
     background: var(--success);
-    position: relative;
     z-index: 2;
   }
-
-  .pulse-ring {
+  .pulse__ring {
     position: absolute;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
+    inset: 0;
+    border-radius: 999px;
     border: 2px solid var(--success);
-    animation: radarPulse 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
     opacity: 0;
+    animation: pulseRing 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+  @keyframes pulseRing {
+    0% { transform: scale(0.5); opacity: 0.7; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+  .pulse--down .pulse__dot { background: var(--danger); }
+  .pulse--down .pulse__ring { border-color: var(--danger); animation: none; opacity: 0.18; }
+
+  .live-status-bar__head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+    flex: 1;
   }
 
-  @keyframes radarPulse {
-    0% { transform: scale(0.5); opacity: 0.8; }
-    100% { transform: scale(2.5); opacity: 0; }
-  }
-
-  .status-disconnected .pulse-core { background: var(--danger); }
-  .status-disconnected .pulse-ring { border-color: var(--danger); animation: none; opacity: 0.2; }
-
-  .terminal-window {
-    background: #020617;
+  .endpoint-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
     border: 1px solid var(--border);
-    border-radius: 1rem;
-    overflow: hidden;
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+  }
+
+  .copy-icon-btn {
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.15s ease;
+    border: none;
+    background: transparent;
+    padding: 2px;
+  }
+  .copy-icon-btn:hover { color: var(--text); }
+
+  .terminal {
     display: flex;
     flex-direction: column;
-    height: 600px;
+    height: 620px;
+    background: #1c1b19;
+    border: 1px solid #2a2924;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
   }
 
-  .terminal-header {
+  .terminal__header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 0.8rem 1.5rem;
-    background: rgba(30, 41, 59, 0.8);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: #232220;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .window-controls {
-    display: flex;
-    gap: 0.5rem;
+  .term-dots { display: flex; gap: 6px; }
+  .term-dots span {
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+  }
+  .term-dot-red { background: #ed6a5e; }
+  .term-dot-yellow { background: #f4bf4f; }
+  .term-dot-green { background: #61c554; }
+
+  .terminal__title {
+    color: rgba(255, 255, 255, 0.55);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
   }
 
-  .window-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-  }
-
-  .dot-red { background: #ef4444; }
-  .dot-yellow { background: #f59e0b; }
-  .dot-green { background: #10b981; }
-
-  .terminal-title {
-    color: var(--muted);
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 0.85rem;
-    letter-spacing: 0.05em;
-  }
-
-  .terminal-feed {
-    padding: 0; /* Reset padding for full-width rows */
-    overflow-y: auto;
+  .terminal__feed {
     flex: 1;
-    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
-    font-size: 0.85rem;
-    scroll-behavior: smooth;
+    overflow-y: auto;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 0.84rem;
+    background: #1c1b19;
   }
 
-  .terminal-feed::-webkit-scrollbar { width: 8px; }
-  .terminal-feed::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-  .terminal-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+  .terminal__feed::-webkit-scrollbar { width: 8px; }
+  .terminal__feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+  .terminal__feed::-webkit-scrollbar-track { background: transparent; }
 
-  /* Vercel/Linear Style Compact Deployment Logs */
   .log-entry {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-    animation: fadeIn 0.3s ease-out;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    animation: slideIn 0.25s ease-out;
   }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateX(-10px); }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
     to { opacity: 1; transform: translateX(0); }
   }
-
-  .log-entry:last-child {
-    border-bottom: none;
+  .log-entry[open] {
+    background: rgba(255, 255, 255, 0.03);
   }
 
   .log-summary {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.6rem 1.5rem;
+    gap: 14px;
+    padding: 10px 18px;
     cursor: pointer;
-    list-style: none; /* Hide default triangle */
-    transition: background 0.2s;
+    list-style: none;
     user-select: none;
+    transition: background 0.15s ease;
   }
-
-  .log-summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .log-summary:hover {
-    background: rgba(255, 255, 255, 0.02);
-  }
+  .log-summary::-webkit-details-marker { display: none; }
+  .log-summary:hover { background: rgba(255, 255, 255, 0.04); }
 
   .log-time {
-    color: #64748b; /* Slate 500 */
+    color: #76746d;
     flex-shrink: 0;
-    min-width: 90px; /* Fixed width to align logs */
+    min-width: 90px;
+    font-variant-numeric: tabular-nums;
   }
 
   .log-badge {
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
+    padding: 3px 9px;
+    border-radius: 6px;
     font-size: 0.7rem;
-    font-weight: 700;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
     flex-shrink: 0;
     min-width: 110px;
     text-align: center;
   }
 
-  .badge-rcpt_accepted { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-  .badge-rcpt_rejected { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-  .badge-queued { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-  .badge-default { background: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+  .badge-rcpt_accepted { background: rgba(79, 125, 74, 0.22); color: #94d188; }
+  .badge-rcpt_rejected { background: rgba(177, 67, 67, 0.22); color: #f08c8c; }
+  .badge-queued { background: rgba(74, 107, 128, 0.22); color: #8fb6cd; }
+  .badge-default { background: rgba(255, 255, 255, 0.08); color: #d3cfc1; }
 
   .log-message {
-    color: #e2e8f0;
+    color: #ebe7d8;
     flex: 1;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .log-meta-id {
-    color: #94a3b8;
-  }
-  
-  .log-target {
-    color: var(--primary);
-  }
-
-  .log-chevron {
-    color: #64748b;
-    transition: transform 0.2s;
-    flex-shrink: 0;
-  }
-
-  .log-entry[open] .log-chevron {
-    transform: rotate(90deg);
-  }
-
-  .log-entry[open] .log-summary {
-    background: rgba(255, 255, 255, 0.02);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
-  }
-
-  .log-details {
-    background: rgba(0, 0, 0, 0.2);
-    border-left: 2px solid var(--primary);
-    padding: 1rem 1.5rem 1rem 2.5rem; /* Indented to show hierarchy */
-  }
-
-  .log-json {
-    margin: 0;
-    color: #a78bfa; /* subtle violet for json */
-    white-space: pre-wrap;
-    word-break: break-all;
-    font-size: 0.8rem;
-  }
-
-  .sessions-card {
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: 1rem;
-    border: 1px solid var(--border);
-    padding: 2rem;
-  }
-
-  .table td, .table th {
     white-space: nowrap;
   }
 
-  .copy-btn-icon {
-    cursor: pointer;
-    color: var(--muted);
-    transition: color 0.2s;
+  .log-meta-id { color: #837f73; }
+  .log-target { color: #d97757; font-weight: 600; }
+
+  .log-chevron {
+    color: #76746d;
+    transition: transform 0.18s ease;
+    flex-shrink: 0;
   }
-  
-  .copy-btn-icon:hover {
-    color: var(--text);
+  .log-entry[open] .log-chevron { transform: rotate(90deg); }
+
+  .log-details {
+    padding: 12px 18px 16px 50px;
+    background: rgba(0, 0, 0, 0.22);
+    border-left: 2px solid var(--accent);
+  }
+  .log-json {
+    margin: 0;
+    color: #c8b88d;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 0.78rem;
+    line-height: 1.6;
+  }
+
+  .terminal__empty {
+    padding: 70px 20px;
+    text-align: center;
+    color: #76746d;
+    font-family: var(--font-mono);
+    font-size: 0.86rem;
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="live-dashboard">
-
-  <!-- Status Bar -->
-  <div class="status-bar" data-aos="fade-down">
-    <div class="status-left">
-      <div class="status-pulse" id="stream-status-wrapper">
-        <div class="pulse-ring"></div>
-        <div class="pulse-core"></div>
+<div class="live-stack">
+  <section class="live-status-bar">
+    <div class="live-status-bar__head">
+      <div class="pulse" id="stream-status-wrapper">
+        <span class="pulse__ring"></span>
+        <span class="pulse__dot"></span>
       </div>
       <div>
-        <h2 style="margin: 0; font-size: 1.25rem;">实时监控中枢 (Live Command Center)</h2>
-        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
-          <span id="stream-status" style="color: var(--success); font-weight: 600; font-size: 0.9rem;">已连接</span>
-          <span class="muted" style="font-size: 0.85rem;">| 推送接口 (SSE Endpoint):</span>
-          <code style="font-size: 0.8rem; background: rgba(255,255,255,0.05); padding: 0.1rem 0.4rem; border-radius: 4px;" id="endpoint-url">{{ stream_url }}</code>
-          <svg class="copy-btn-icon" onclick="navigator.clipboard.writeText(document.getElementById('endpoint-url').textContent)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <p class="eyebrow" style="margin-bottom: 4px;">Live SSE 流</p>
+        <h2>实时监控中枢</h2>
+        <div class="row" style="margin-top: 8px; gap: 8px;">
+          <span id="stream-status" class="pill pill--success">已连接</span>
+          <span class="muted" style="font-size: 0.84rem;">推送接口</span>
+          <span class="endpoint-pill" id="endpoint-pill">
+            <span id="endpoint-url">{{ stream_url }}</span>
+            <button class="copy-icon-btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('endpoint-url').textContent)" title="复制接口" aria-label="复制接口">
+              <i data-lucide="copy" style="width: 13px; height: 13px;"></i>
+            </button>
+          </span>
         </div>
       </div>
     </div>
-    <div>
-      <button id="clear-logs" class="button button--ghost" style="font-size: 0.85rem; padding: 0.4rem 1rem;">清空控制台</button>
-    </div>
-  </div>
+    <button id="clear-logs" class="button button--ghost button--sm" type="button">
+      <i data-lucide="eraser"></i>清空控制台
+    </button>
+  </section>
 
-  <!-- Terminal Window -->
-  <div class="terminal-window" data-aos="fade-up" data-aos-delay="100">
-    <div class="terminal-header">
-      <div class="window-controls">
-        <div class="window-dot dot-red"></div>
-        <div class="window-dot dot-yellow"></div>
-        <div class="window-dot dot-green"></div>
+  <section class="terminal">
+    <div class="terminal__header">
+      <div class="term-dots">
+        <span class="term-dot-red"></span>
+        <span class="term-dot-yellow"></span>
+        <span class="term-dot-green"></span>
       </div>
-      <div class="terminal-title">~/极速收件箱/实时监控流</div>
-      <div style="width: 52px;"></div> <!-- Spacer for centering -->
+      <div class="terminal__title">~/极速收件箱/live-stream</div>
+      <div style="width: 56px;"></div>
     </div>
-    
-    <div class="terminal-feed" id="live-feed">
+    <div class="terminal__feed" id="live-feed">
       {% if events %}
         {% for event in events %}
           <details class="log-entry" data-event-type="{{ event.type }}">
@@ -287,20 +275,12 @@
               <span class="log-time">{{ cn_time(event.ts, default="00:00:00") }}</span>
               <span class="log-badge badge-{{ event.type }}">{{ event.type | upper }}</span>
               <span class="log-message">
-                {% if event.rcpt_to %}
-                  → <span class="log-target">{{ event.rcpt_to }}</span>
-                {% endif %}
-                {% if event.session_id %}
-                  <span class="log-meta-id">[会话: {{ event.session_id }}]</span>
-                {% endif %}
-                {% if event.message_id %}
-                  <span class="log-meta-id">[邮件ID: {{ event.message_id }}]</span>
-                {% endif %}
-                {% if not event.rcpt_to and not event.session_id and not event.message_id %}
-                  <span class="log-meta-id">系统事件已触发</span>
-                {% endif %}
+                {% if event.rcpt_to %}→ <span class="log-target">{{ event.rcpt_to }}</span>{% endif %}
+                {% if event.session_id %}<span class="log-meta-id">[会话: {{ event.session_id }}]</span>{% endif %}
+                {% if event.message_id %}<span class="log-meta-id">[邮件ID: {{ event.message_id }}]</span>{% endif %}
+                {% if not event.rcpt_to and not event.session_id and not event.message_id %}<span class="log-meta-id">系统事件已触发</span>{% endif %}
               </span>
-              <svg class="log-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              <svg class="log-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
             </summary>
             <div class="log-details">
               <pre class="log-json">{{ event | tojson(indent=2) }}</pre>
@@ -308,23 +288,26 @@
           </details>
         {% endfor %}
       {% else %}
-        <div class="empty-state" data-empty-state="live" style="border: none; padding: 4rem 1rem; background: transparent;">
-          <p style="color: var(--muted); font-family: monospace;">$ 正在等待 SMTP 事件传入...</p>
+        <div class="terminal__empty" data-empty-state="live">
+          $ 正在等待 SMTP 事件传入...
         </div>
       {% endif %}
     </div>
-  </div>
-  <div class="pagination-summary" style="margin-top: -0.75rem;">
-    终端窗口默认只展示最近 {{ stream_item_limit }} 条流事件，新的事件会自动顶到最前面。
-  </div>
+  </section>
 
-  <!-- Sessions Table -->
-  <div class="sessions-card" data-aos="fade-up" data-aos-delay="200">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-      <h3 style="margin: 0; font-size: 1.15rem;">近期网络会话</h3>
-      <span class="pill pill--neutral">默认每页 {{ sessions_pagination.limit }} 条</span>
-    </div>
-    
+  <p class="muted" style="font-size: 0.84rem; margin: -10px 0 0;">
+    终端窗口默认只展示最近 {{ stream_item_limit }} 条流事件，新的事件会自动顶到最前面。
+  </p>
+
+  <section class="card">
+    <header class="card__head">
+      <div>
+        <h2>近期网络会话</h2>
+        <p class="lede">SMTP 会话级别的连接快照，可结合实时事件流定位问题。</p>
+      </div>
+      <span class="pill pill--neutral pill--plain">默认每页 {{ sessions_pagination.limit }} 条</span>
+    </header>
+
     {% if sessions %}
       <div class="table-wrap">
         <table class="table">
@@ -342,61 +325,67 @@
           <tbody>
             {% for session in sessions %}
               <tr>
-                <td><code style="color: var(--secondary); background: transparent; padding: 0;">{{ session.id }}</code></td>
+                <td><code>{{ session.id }}</code></td>
                 <td>
-                  <span class="pill {% if session.status == 'open' %}pill--success{% elif session.status == 'error' %}pill--danger{% else %}pill--neutral{% endif %}" style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
+                  <span class="pill {% if session.status == 'open' %}pill--success{% elif session.status == 'error' %}pill--danger{% else %}pill--neutral{% endif %}">
                     {{ cn_session_status(session.status) }}
                   </span>
                 </td>
-                <td style="font-family: monospace;">
+                <td class="mono">
                   {{ session.remote_ip }}<span class="muted">{% if session.remote_port is not none %}:{{ session.remote_port }}{% endif %}</span>
                 </td>
-                <td class="muted">{{ session.helo_name or "N/A" }}</td>
+                <td class="muted">{{ session.helo_name or "—" }}</td>
                 <td>
                   {% if session.tls_used %}
-                    <span style="color: var(--success);">是</span>
+                    <span class="pill pill--success">是</span>
                   {% else %}
-                    <span class="muted">否</span>
+                    <span class="pill pill--neutral pill--plain">否</span>
                   {% endif %}
                 </td>
-                <td class="muted">{{ session.last_rcpt_to_sample or "N/A" }}</td>
-                <td class="muted" style="font-size: 0.85rem;">{{ cn_datetime(session.connect_at) }}</td>
+                <td class="muted">{{ session.last_rcpt_to_sample or "—" }}</td>
+                <td class="muted mono">{{ cn_datetime(session.connect_at) }}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
       <div class="pagination-panel">
-        <div class="pagination-summary">
+        <span class="pagination-summary">
           当前第 {{ sessions_pagination.current_page }} / {{ sessions_pagination.total_pages }} 页，显示 {{ sessions_pagination.start_index }} - {{ sessions_pagination.end_index }}，共 {{ sessions_pagination.total_count }} 个会话
-        </div>
+        </span>
         {{ pagination_nav(sessions_pagination) }}
       </div>
     {% else %}
-      <div class="empty-state" style="border: 1px dashed var(--border);">
+      <div class="empty-state">
+        <span class="empty-state__icon"><i data-lucide="wifi-off"></i></span>
         <p>暂无近期 SMTP 会话。</p>
       </div>
     {% endif %}
-  </div>
-
+  </section>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
   (() => {
     const feed = document.getElementById("live-feed");
     const statusWrapper = document.getElementById("stream-status-wrapper");
     const statusText = document.getElementById("stream-status");
     const clearBtn = document.getElementById("clear-logs");
-    
+    const STREAM_LIMIT = {{ stream_item_limit }};
+
     if (clearBtn) {
       clearBtn.addEventListener("click", () => {
-        if (feed) feed.innerHTML = '<div class="empty-state" data-empty-state="live" style="border: none; padding: 4rem 1rem; background: transparent;"><p style="color: var(--muted); font-family: monospace;">$ 控制台已清空。正在等待新事件...</p></div>';
+        if (feed) feed.innerHTML = '<div class="terminal__empty" data-empty-state="live">$ 控制台已清空。正在等待新事件...</div>';
       });
     }
-    
+
     if (!feed || !window.EventSource) {
-      if (statusText) statusText.textContent = "不支持 SSE";
-      if (statusWrapper) statusWrapper.classList.add("status-disconnected");
+      if (statusText) {
+        statusText.textContent = "不支持 SSE";
+        statusText.className = "pill pill--danger";
+      }
+      if (statusWrapper) statusWrapper.classList.add("pulse--down");
       return;
     }
 
@@ -418,23 +407,18 @@
     const formatShanghaiTime = (value) => {
       if (!value) return "00:00:00";
       const date = new Date(value);
-      if (Number.isNaN(date.getTime())) {
-        return String(value);
-      }
+      if (Number.isNaN(date.getTime())) return String(value);
       return shanghaiTimeFormatter.format(date);
     };
 
     const appendEvent = (payload) => {
       const emptyState = feed.querySelector("[data-empty-state='live']");
-      if (emptyState) {
-        feed.innerHTML = "";
-      }
+      if (emptyState) feed.innerHTML = "";
 
-      // Use <details> for the expandable accordion effect
       const item = document.createElement("details");
       item.className = "log-entry";
+      item.setAttribute("data-event-type", payload.type || "default");
 
-      // Summary holds the single-line log
       const summary = document.createElement("summary");
       summary.className = "log-summary";
 
@@ -455,19 +439,15 @@
       if (payload.session_id) msgHtml += `<span class="log-meta-id">[会话: ${payload.session_id}]</span> `;
       if (payload.message_id) msgHtml += `<span class="log-meta-id">[邮件ID: ${payload.message_id}]</span> `;
       if (!payload.rcpt_to && !payload.session_id && !payload.message_id) msgHtml += `<span class="log-meta-id">系统事件已触发</span>`;
-      
       msg.innerHTML = msgHtml;
       summary.appendChild(msg);
 
-      // Chevron icon
-      const chevronWrapper = document.createElement("div");
-      chevronWrapper.innerHTML = `<svg class="log-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
-      summary.appendChild(chevronWrapper.firstChild);
+      const chevron = document.createElement("div");
+      chevron.innerHTML = `<svg class="log-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+      summary.appendChild(chevron.firstChild);
 
-      // Details holds the raw JSON
       const details = document.createElement("div");
       details.className = "log-details";
-      
       const code = document.createElement("pre");
       code.className = "log-json";
       code.textContent = JSON.stringify(payload, null, 2);
@@ -475,24 +455,23 @@
 
       item.appendChild(summary);
       item.appendChild(details);
-      
-      // Auto-open the very first event if feed is currently empty
+
       if (feed.children.length === 0) item.open = true;
 
       feed.prepend(item);
-      while (feed.children.length > {{ stream_item_limit }}) {
+      while (feed.children.length > STREAM_LIMIT) {
         feed.removeChild(feed.lastElementChild);
       }
     };
 
     const source = new EventSource({{ stream_url | tojson }});
-    
+
     source.onopen = () => {
       if (statusText) {
         statusText.textContent = "已连接";
-        statusText.style.color = "var(--success)";
+        statusText.className = "pill pill--success";
       }
-      if (statusWrapper) statusWrapper.classList.remove("status-disconnected");
+      if (statusWrapper) statusWrapper.classList.remove("pulse--down");
     };
 
     const eventTypes = {{ live_event_types | tojson }};
@@ -501,7 +480,7 @@
         try {
           appendEvent(JSON.parse(event.data));
         } catch (error) {
-          appendEvent({type, raw: event.data});
+          appendEvent({ type, raw: event.data });
         }
       });
     });
@@ -509,9 +488,9 @@
     source.onerror = () => {
       if (statusText) {
         statusText.textContent = "连接已断开";
-        statusText.style.color = "var(--danger)";
+        statusText.className = "pill pill--danger";
       }
-      if (statusWrapper) statusWrapper.classList.add("status-disconnected");
+      if (statusWrapper) statusWrapper.classList.add("pulse--down");
     };
   })();
 </script>
