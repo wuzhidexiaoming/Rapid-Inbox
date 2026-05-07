@@ -2,6 +2,7 @@
 .env
 .agents/
 .codex/
+.vscode/
 storage/
 __pycache__/
 *.pyc

@@ -116,9 +116,56 @@
     margin-top: 3px;
   }
 
+  .danger-zone {
+    border: 1px solid rgba(177, 67, 67, 0.28);
+    border-radius: var(--radius-lg);
+    background: var(--bg-elevated);
+    overflow: hidden;
+  }
+  .danger-zone__head {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(177, 67, 67, 0.18);
+    background: rgba(246, 226, 221, 0.4);
+  }
+  .danger-zone__head h2 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    color: var(--danger-strong);
+  }
+  .danger-zone__head p {
+    margin: 2px 0 0;
+    color: var(--text-muted);
+    font-size: 0.84rem;
+  }
+  .danger-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border-faint);
+  }
+  .danger-row:first-of-type { border-top: 0; }
+  .danger-row__copy { min-width: 0; }
+  .danger-row__copy h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+  .danger-row__copy p {
+    margin: 3px 0 0;
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    line-height: 1.55;
+  }
+  .danger-row form { margin: 0; }
+
   @media (max-width: 760px) {
     .horiz-row { grid-template-columns: 1fr; }
     .domain-mode-row { grid-template-columns: 1fr; }
+    .danger-row { grid-template-columns: 1fr; }
+    .danger-row form { justify-self: start; }
   }
 </style>
 {% endblock %}
@@ -166,14 +213,11 @@
     <a href="#mailbox"><i data-lucide="inbox"></i>邮箱规则</a>
     <a href="#transport"><i data-lucide="route"></i>请求方式</a>
     <a href="#security"><i data-lucide="shield"></i>限速 / IP</a>
-    <a href="#rotate"><i data-lucide="refresh-cw"></i>轮换密钥</a>
-    {% if api_key.status == 'revoked' %}
-      <a href="#delete"><i data-lucide="trash-2"></i>删除密钥</a>
-    {% endif %}
+    <a href="#rotate"><i data-lucide="refresh-cw"></i>危险操作</a>
   </nav>
 
   <div class="split-page__main">
-    <form method="post" action="/admin/api-keys/{{ api_key.id }}">
+    <form method="post" action="/admin/api-keys/{{ api_key.id }}" id="api-key-update-form">
       <section class="doc-section" id="identity">
         <header class="doc-section__intro">
           <p class="eyebrow">基本信息</p>
@@ -386,49 +430,57 @@
           <input type="text" name="allowed_ip_cidrs" value="{{ form.allowed_ip_cidrs }}" placeholder="203.0.113.0/24, 2001:db8::/32" />
         </div>
       </section>
-
-      <div class="action-bar">
-        <span class="action-bar__hint">所有修改保存后立即生效。</span>
-        <div class="action-bar__buttons">
-          <a class="button button--ghost" href="/admin/api-keys">放弃</a>
-          <button class="button button--primary" type="submit">
-            <i data-lucide="save"></i>保存修改
-          </button>
-        </div>
-      </div>
     </form>
 
     <section class="doc-section" id="rotate">
       <header class="doc-section__intro">
-        <p class="eyebrow" style="color: var(--danger-strong);">轮换密钥</p>
-        <h2>生成新的密钥串</h2>
-        <p>轮换后旧 secret 立即失效，且不可恢复。新密钥仅展示一次，请在弹出页面立即保存。</p>
+        <p class="eyebrow" style="color: var(--danger-strong);">危险操作</p>
+        <h2>密钥生命周期</h2>
+        <p>以下操作会立即影响线上调用，操作后无法恢复。</p>
       </header>
-      <form method="post" action="/admin/api-keys/{{ api_key.id }}/rotate" onsubmit="return confirm('确认轮换该 API 密钥？旧 secret 将立即失效。')">
-        <button class="button button--danger" type="submit">
-          <i data-lucide="refresh-cw"></i>轮换密钥
-        </button>
-      </form>
+
+      <div class="danger-zone">
+        <div class="danger-row">
+          <div class="danger-row__copy">
+            <h3>轮换密钥</h3>
+            <p>生成新的 secret 串，旧 secret 立即失效。新密钥仅展示一次，请在弹出页面立即保存。</p>
+          </div>
+          <form method="post" action="/admin/api-keys/{{ api_key.id }}/rotate" onsubmit="return confirm('确认轮换该 API 密钥？旧 secret 将立即失效。')">
+            <button class="button button--danger" type="submit">
+              <i data-lucide="refresh-cw"></i>轮换密钥
+            </button>
+          </form>
+        </div>
+
+        {% if api_key.status == 'revoked' %}
+          <div class="danger-row">
+            <div class="danger-row__copy">
+              <h3>删除密钥</h3>
+              <p>该密钥已吊销，可以从数据库中彻底删除。删除后将无法恢复，且历史授权信息会被级联清理。</p>
+            </div>
+            <form
+              method="post"
+              action="/admin/api-keys/{{ api_key.id }}/delete"
+              onsubmit="return confirm('确认永久删除该已吊销的 API 密钥？此操作不可恢复。')"
+            >
+              <button class="button button--danger" type="submit">
+                <i data-lucide="trash-2"></i>删除密钥
+              </button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
     </section>
 
-    {% if api_key.status == 'revoked' %}
-      <section class="doc-section" id="delete">
-        <header class="doc-section__intro">
-          <p class="eyebrow" style="color: var(--danger-strong);">删除密钥</p>
-          <h2>从系统中永久删除</h2>
-          <p>该密钥已吊销，可以从数据库中彻底删除。删除后将无法恢复，且历史授权信息会被级联清理。</p>
-        </header>
-        <form
-          method="post"
-          action="/admin/api-keys/{{ api_key.id }}/delete"
-          onsubmit="return confirm('确认永久删除该已吊销的 API 密钥？此操作不可恢复。')"
-        >
-          <button class="button button--danger" type="submit">
-            <i data-lucide="trash-2"></i>删除密钥
-          </button>
-        </form>
-      </section>
-    {% endif %}
+    <div class="action-bar">
+      <span class="action-bar__hint">所有修改保存后立即生效。</span>
+      <div class="action-bar__buttons">
+        <a class="button button--ghost" href="/admin/api-keys">放弃</a>
+        <button class="button button--primary" type="submit" form="api-key-update-form">
+          <i data-lucide="save"></i>保存修改
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
