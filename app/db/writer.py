@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import threading
 from collections.abc import Callable
@@ -34,7 +35,7 @@ class DatabaseWriter:
                 return operation(connection)
 
     async def execute(self, operation: Callable[[sqlite3.Connection], T]) -> T:
-        return self._execute_sync(operation)
+        return await asyncio.to_thread(self._execute_sync, operation)
 
     async def execute_maintenance(self, operation: Callable[[sqlite3.Connection], T]) -> T:
-        return self._execute_maintenance_sync(operation)
+        return await asyncio.to_thread(self._execute_maintenance_sync, operation)

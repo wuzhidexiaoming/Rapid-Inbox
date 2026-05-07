@@ -43,6 +43,8 @@ def test_default_settings_loads_values_from_dotenv(tmp_path: Path) -> None:
                 "SMTP_PORT=2525",
                 "MAX_MESSAGE_SIZE_BYTES=1024",
                 "MAX_RECIPIENTS_PER_MESSAGE=9",
+                "PARSE_WORKER_COUNT=7",
+                "FSYNC_STORAGE_WRITES=true",
                 "ADMIN_TOKEN=admin-token-1",
                 "PUBLIC_API_KEY=public-token-1",
             ]
@@ -63,6 +65,8 @@ def test_default_settings_loads_values_from_dotenv(tmp_path: Path) -> None:
     assert settings.smtp_port == 2525
     assert settings.max_message_size_bytes == 1024
     assert settings.max_recipients_per_message == 9
+    assert settings.parse_worker_count == 7
+    assert settings.fsync_storage_writes is True
     assert settings.admin_token == "admin-token-1"
     assert settings.public_api_key == "public-token-1"
 

@@ -102,6 +102,8 @@ HTTP 与内嵌 SMTP 同进程启动：
 | `SMTP_MAX_CONCURRENT_CONNECTIONS` | `100` | SMTP 并发连接上限，`0` 表示不限制 |
 | `SMTP_CONNECTION_RATE_LIMIT_COUNT` | `20` | 每个 IP 在短窗口内允许建立的 SMTP 连接数，`0` 表示不限制 |
 | `SMTP_CONNECTION_RATE_LIMIT_WINDOW_SECONDS` | `60` | SMTP per-IP 连接限流窗口 |
+| `PARSE_WORKER_COUNT` | `4` | 后台 MIME 解析 worker 数量 |
+| `FSYNC_STORAGE_WRITES` | `false` | 是否对邮件文件写入执行强制 fsync |
 | `DISK_WARNING_THRESHOLD_PERCENT` | `85` | Dashboard 磁盘使用率告警阈值 |
 | `ADMIN_TOKEN` | `dev-admin-token` | 兼容管理 API 的管理令牌 |
 | `PUBLIC_API_KEY` | `public-demo-key` | 兼容公开 API 的默认访问密钥 |

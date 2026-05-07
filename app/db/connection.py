@@ -43,3 +43,47 @@ def _apply_lightweight_migrations(connection: sqlite3.Connection) -> None:
                 CHECK (must_change_password IN (0, 1))
             """
         )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS mail_metric_buckets (
+            bucket_ts TEXT PRIMARY KEY,
+            deliveries INTEGER NOT NULL DEFAULT 0,
+            parse_failures INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    _backfill_mail_metric_buckets(connection)
+
+
+def _backfill_mail_metric_buckets(connection: sqlite3.Connection) -> None:
+    existing = connection.execute("SELECT COUNT(*) AS count FROM mail_metric_buckets").fetchone()
+    if existing is not None and int(existing["count"]) > 0:
+        return
+    connection.execute(
+        """
+        INSERT INTO mail_metric_buckets (bucket_ts, deliveries, parse_failures)
+        SELECT
+            substr(delivered_at, 1, 19) || 'Z' AS bucket_ts,
+            COUNT(*) AS deliveries,
+            0 AS parse_failures
+        FROM message_deliveries
+        WHERE status = 'active'
+        GROUP BY bucket_ts
+        ON CONFLICT(bucket_ts) DO UPDATE SET
+            deliveries = mail_metric_buckets.deliveries + excluded.deliveries
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO mail_metric_buckets (bucket_ts, deliveries, parse_failures)
+        SELECT
+            substr(received_at, 1, 19) || 'Z' AS bucket_ts,
+            0 AS deliveries,
+            COUNT(*) AS parse_failures
+        FROM messages
+        WHERE parse_status = 'failed'
+        GROUP BY bucket_ts
+        ON CONFLICT(bucket_ts) DO UPDATE SET
+            parse_failures = mail_metric_buckets.parse_failures + excluded.parse_failures
+        """
+    )

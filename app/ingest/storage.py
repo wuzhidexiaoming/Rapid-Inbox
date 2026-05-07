@@ -140,10 +140,12 @@ class FileStorage:
         part_path = final_path.with_name(f".{final_path.name}.part")
         with part_path.open("wb") as handle:
             handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
+            if self._settings.fsync_storage_writes:
+                handle.flush()
+                os.fsync(handle.fileno())
         os.replace(part_path, final_path)
-        self._fsync_directory_chain(final_path.parent)
+        if self._settings.fsync_storage_writes:
+            self._fsync_directory_chain(final_path.parent)
 
     def _fsync_directory_chain(self, directory: Path) -> None:
         current = directory

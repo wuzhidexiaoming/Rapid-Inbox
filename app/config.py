@@ -23,6 +23,8 @@ class Settings:
     smtp_max_concurrent_connections: int = 100
     smtp_connection_rate_limit_count: int = 20
     smtp_connection_rate_limit_window_seconds: int = 60
+    parse_worker_count: int = 4
+    fsync_storage_writes: bool = False
     disk_warning_threshold_percent: int = 85
     admin_token: str = "dev-admin-token"
     public_api_key: str = "public-demo-key"
@@ -109,6 +111,13 @@ def _coerce_int(raw: dict[str, str], key: str, default: int) -> int:
     return int(value)
 
 
+def _coerce_bool(raw: dict[str, str], key: str, default: bool) -> bool:
+    value = raw.get(key)
+    if value is None or not value.strip():
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def default_settings(base_dir: Path) -> Settings:
     dotenv_values = _load_dotenv(base_dir / ".env")
     merged = {**dotenv_values, **os.environ}
@@ -144,6 +153,8 @@ def default_settings(base_dir: Path) -> Settings:
             "SMTP_CONNECTION_RATE_LIMIT_WINDOW_SECONDS",
             60,
         ),
+        parse_worker_count=_coerce_int(merged, "PARSE_WORKER_COUNT", 4),
+        fsync_storage_writes=_coerce_bool(merged, "FSYNC_STORAGE_WRITES", False),
         disk_warning_threshold_percent=_coerce_int(merged, "DISK_WARNING_THRESHOLD_PERCENT", 85),
         admin_token=_coerce_str(merged, "ADMIN_TOKEN", "dev-admin-token"),
         public_api_key=_coerce_str(merged, "PUBLIC_API_KEY", "public-demo-key"),

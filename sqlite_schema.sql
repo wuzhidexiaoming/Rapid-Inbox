@@ -178,6 +178,12 @@ CREATE INDEX IF NOT EXISTS idx_message_deliveries_message ON message_deliveries(
 CREATE INDEX IF NOT EXISTS idx_message_deliveries_status_time ON message_deliveries(status, delivered_at DESC);
 CREATE INDEX IF NOT EXISTS idx_message_deliveries_rcpt_to ON message_deliveries(rcpt_to, delivered_at DESC);
 
+CREATE TABLE IF NOT EXISTS mail_metric_buckets (
+    bucket_ts TEXT PRIMARY KEY,
+    deliveries INTEGER NOT NULL DEFAULT 0,
+    parse_failures INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS attachments (
     id TEXT PRIMARY KEY,
     message_id TEXT NOT NULL,

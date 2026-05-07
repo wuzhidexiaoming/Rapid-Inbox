@@ -45,6 +45,7 @@ def test_write_raw_message_fsyncs_created_directory_chain(tmp_path, monkeypatch)
     settings = Settings(
         storage_root=tmp_path / "storage",
         database_path=tmp_path / "storage" / "app.db",
+        fsync_storage_writes=True,
     )
     storage = FileStorage(settings)
 

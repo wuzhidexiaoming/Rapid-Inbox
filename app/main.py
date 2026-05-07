@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
+from contextlib import suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -24,6 +26,11 @@ def create_app(*, settings: Settings | None = None, embed_smtp: bool = False) ->
     templates = Jinja2Templates(directory=str(app_dir / "templates"))
     register_template_helpers(templates)
 
+    async def _shutdown(runtime: RapidInboxRuntime, smtp_server: SMTPServer | None) -> None:
+        if smtp_server is not None:
+            await asyncio.to_thread(smtp_server.stop)
+        await runtime.stop()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.settings = resolved_settings
@@ -37,11 +44,13 @@ def create_app(*, settings: Settings | None = None, embed_smtp: bool = False) ->
                 smtp_server.start()
             yield
         finally:
+            shutdown_task = asyncio.create_task(_shutdown(runtime, smtp_server))
             try:
-                if smtp_server is not None:
-                    smtp_server.stop()
-            finally:
-                await runtime.stop()
+                await asyncio.shield(shutdown_task)
+            except asyncio.CancelledError:
+                shutdown_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await shutdown_task
 
     app = FastAPI(title="Rapid Inbox", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=str(app_dir / "static")), name="static")

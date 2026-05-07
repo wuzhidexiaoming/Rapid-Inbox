@@ -307,10 +307,10 @@ def _delivery_chart(connection: sqlite3.Connection, *, hours: int = 24) -> dict[
     rows = connection.execute(
         """
         SELECT
-            substr(delivered_at, 1, 13) || ':00:00Z' AS bucket,
-            COUNT(*) AS count
-        FROM message_deliveries
-        WHERE delivered_at >= ? AND status = 'active'
+            substr(bucket_ts, 1, 13) || ':00:00Z' AS bucket,
+            SUM(deliveries) AS count
+        FROM mail_metric_buckets
+        WHERE bucket_ts >= ?
         GROUP BY bucket
         """,
         (cutoff,),
@@ -392,6 +392,16 @@ def _delivery_chart(connection: sqlite3.Connection, *, hours: int = 24) -> dict[
     }
 
 
+def _metric_sum(connection: sqlite3.Connection, column: str, cutoff: str) -> int:
+    if column not in {"deliveries", "parse_failures"}:
+        raise ValueError("invalid metric column")
+    row = connection.execute(
+        f"SELECT COALESCE(SUM({column}), 0) AS count FROM mail_metric_buckets WHERE bucket_ts >= ?",
+        (cutoff,),
+    ).fetchone()
+    return 0 if row is None else int(row["count"])
+
+
 def _dashboard_stats(request: Request) -> dict[str, Any]:
     runtime = request.app.state.runtime
     one_minute_cutoff = _utc_cutoff(60)
@@ -403,26 +413,10 @@ def _dashboard_stats(request: Request) -> dict[str, Any]:
         stats = {
             "open_sessions": _count(connection, "SELECT COUNT(*) AS count FROM smtp_sessions WHERE status = 'open'"),
             "active_connections": runtime.active_smtp_connection_count(),
-            "received_last_minute": _count(
-                connection,
-                "SELECT COUNT(*) AS count FROM message_deliveries WHERE delivered_at >= ? AND status = 'active'",
-                (one_minute_cutoff,),
-            ),
-            "received_last_five_minutes": _count(
-                connection,
-                "SELECT COUNT(*) AS count FROM message_deliveries WHERE delivered_at >= ? AND status = 'active'",
-                (five_minute_cutoff,),
-            ),
-            "received_last_day": _count(
-                connection,
-                "SELECT COUNT(*) AS count FROM message_deliveries WHERE delivered_at >= ? AND status = 'active'",
-                (day_cutoff,),
-            ),
-            "failed_last_day": _count(
-                connection,
-                "SELECT COUNT(*) AS count FROM messages WHERE parse_status = 'failed' AND received_at >= ?",
-                (day_cutoff,),
-            ),
+            "received_last_minute": _metric_sum(connection, "deliveries", one_minute_cutoff),
+            "received_last_five_minutes": _metric_sum(connection, "deliveries", five_minute_cutoff),
+            "received_last_day": _metric_sum(connection, "deliveries", day_cutoff),
+            "failed_last_day": _metric_sum(connection, "parse_failures", day_cutoff),
             "domains": _count(connection, "SELECT COUNT(*) AS count FROM domains"),
             "mailboxes": _count(connection, "SELECT COUNT(*) AS count FROM mailboxes"),
             "messages": _count(connection, "SELECT COUNT(*) AS count FROM messages"),

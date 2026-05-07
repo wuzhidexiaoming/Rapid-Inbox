@@ -60,33 +60,36 @@ async def stream_smtp_live_events(
         replay_initial = True
         last_seq = 0
 
-    if replay_initial:
-        events, cursor = live_state.snapshot_state()
-        smtp_events = [event for event in events if str(event.get("type") or "") in LIVE_SSE_EVENT_TYPES]
-        if smtp_events:
-            for event in smtp_events:
-                seq = int(event.get("seq", 0))
-                yield encode_sse(event, event_id=f"{live_state.generation}:{seq}")
-            parsed_snapshot_cursor = _parse_live_cursor(cursor)
-            last_seq = parsed_snapshot_cursor[1] if parsed_snapshot_cursor is not None else 0
-        else:
-            history_events = _recent_message_events(runtime, limit=history_limit)
-            history_count = len(history_events)
-            for index, event in enumerate(history_events):
-                history_seq = -(history_count - index)
-                yield encode_sse(event, event_id=f"{live_state.generation}:{history_seq}")
-            last_seq = 0
+    try:
+        if replay_initial:
+            events, cursor = live_state.snapshot_state()
+            smtp_events = [event for event in events if str(event.get("type") or "") in LIVE_SSE_EVENT_TYPES]
+            if smtp_events:
+                for event in smtp_events:
+                    seq = int(event.get("seq", 0))
+                    yield encode_sse(event, event_id=f"{live_state.generation}:{seq}")
+                parsed_snapshot_cursor = _parse_live_cursor(cursor)
+                last_seq = parsed_snapshot_cursor[1] if parsed_snapshot_cursor is not None else 0
+            else:
+                history_events = _recent_message_events(runtime, limit=history_limit)
+                history_count = len(history_events)
+                for index, event in enumerate(history_events):
+                    history_seq = -(history_count - index)
+                    yield encode_sse(event, event_id=f"{live_state.generation}:{history_seq}")
+                last_seq = 0
 
-    while True:
-        raw_events = live_state.snapshot_since(last_seq)
-        if raw_events:
-            last_seq = int(raw_events[-1].get("seq", last_seq))
-            for event in raw_events:
-                if str(event.get("type") or "") not in LIVE_SSE_EVENT_TYPES:
-                    continue
-                yield encode_sse(event, event_id=f"{live_state.generation}:{event['seq']}")
-            continue
-        await asyncio.sleep(poll_interval)
+        while True:
+            raw_events = live_state.snapshot_since(last_seq)
+            if raw_events:
+                last_seq = int(raw_events[-1].get("seq", last_seq))
+                for event in raw_events:
+                    if str(event.get("type") or "") not in LIVE_SSE_EVENT_TYPES:
+                        continue
+                    yield encode_sse(event, event_id=f"{live_state.generation}:{event['seq']}")
+                continue
+            await asyncio.sleep(poll_interval)
+    except asyncio.CancelledError:
+        return
 
 
 def count_smtp_sessions(runtime) -> int:

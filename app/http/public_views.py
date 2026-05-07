@@ -146,6 +146,8 @@ async def mailbox_websocket(mailbox_address: str, websocket: WebSocket) -> None:
                     await websocket.send_json({"type": event_type, "item": item})
                 continue
             await asyncio.sleep(0.25)
+    except asyncio.CancelledError:
+        return
     except (WebSocketDisconnect, RuntimeError):
         return
 
