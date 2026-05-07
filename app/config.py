@@ -20,8 +20,8 @@ class Settings:
     max_message_size_bytes: int = 52_428_800
     max_recipients_per_message: int = 20
     smtp_idle_timeout_seconds: int = 30
-    smtp_max_concurrent_connections: int = 100
-    smtp_connection_rate_limit_count: int = 20
+    smtp_max_concurrent_connections: int = 0
+    smtp_connection_rate_limit_count: int = 0
     smtp_connection_rate_limit_window_seconds: int = 60
     smtp_close_after_data: bool = True
     parse_worker_count: int = 4
@@ -147,8 +147,8 @@ def default_settings(base_dir: Path) -> Settings:
         max_message_size_bytes=_coerce_int(merged, "MAX_MESSAGE_SIZE_BYTES", 52_428_800),
         max_recipients_per_message=_coerce_int(merged, "MAX_RECIPIENTS_PER_MESSAGE", 20),
         smtp_idle_timeout_seconds=_coerce_int(merged, "SMTP_IDLE_TIMEOUT_SECONDS", 30),
-        smtp_max_concurrent_connections=_coerce_int(merged, "SMTP_MAX_CONCURRENT_CONNECTIONS", 100),
-        smtp_connection_rate_limit_count=_coerce_int(merged, "SMTP_CONNECTION_RATE_LIMIT_COUNT", 20),
+        smtp_max_concurrent_connections=_coerce_int(merged, "SMTP_MAX_CONCURRENT_CONNECTIONS", 0),
+        smtp_connection_rate_limit_count=_coerce_int(merged, "SMTP_CONNECTION_RATE_LIMIT_COUNT", 0),
         smtp_connection_rate_limit_window_seconds=_coerce_int(
             merged,
             "SMTP_CONNECTION_RATE_LIMIT_WINDOW_SECONDS",
