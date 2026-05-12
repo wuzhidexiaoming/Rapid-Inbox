@@ -12,10 +12,12 @@ find_library(ICUUC_LIBRARY NAMES icuuc libicuuc.so.72 REQUIRED)
 
 set(INGESTD_LIB_SOURCES
     src/config.cpp
+    src/domain_cache.cpp
     src/domain_matcher.cpp
     src/id.cpp
     src/json_util.cpp
     src/sha256.cpp
+    src/sqlite_db.cpp
     src/storage_path.cpp
     src/time_utils.cpp
 )
@@ -36,7 +38,9 @@ target_link_libraries(rapid-inbox-ingestd PRIVATE ingestd_core)
 add_executable(ingestd_tests
     tests/test_main.cpp
     tests/test_config.cpp
+    tests/test_domain_cache.cpp
     tests/test_domain_matcher.cpp
+    tests/test_sqlite_db.cpp
     tests/test_storage_utils.cpp
 )
 target_compile_options(ingestd_tests PRIVATE -Wall -Wextra -Wpedantic)
