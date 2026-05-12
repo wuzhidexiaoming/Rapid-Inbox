@@ -32,6 +32,9 @@ void test_sqlite_db_cleans_up_after_constructor_failure();
 void test_sqlite_statement_step_done_rejects_rows();
 void test_sqlite_statement_reset_clears_bindings();
 void test_sqlite_statement_outliving_db_closes_connection();
+void test_mail_queue_capacity_and_close();
+void test_mail_queue_try_push_accepts_lvalues_and_rvalues();
+void test_mail_queue_close_wakes_waiting_pop_batch();
 
 int main() {
     try {
@@ -55,6 +58,9 @@ int main() {
         test_sqlite_statement_step_done_rejects_rows();
         test_sqlite_statement_reset_clears_bindings();
         test_sqlite_statement_outliving_db_closes_connection();
+        test_mail_queue_capacity_and_close();
+        test_mail_queue_try_push_accepts_lvalues_and_rvalues();
+        test_mail_queue_close_wakes_waiting_pop_batch();
         std::cout << "ingestd_tests ok\n";
         return EXIT_SUCCESS;
     } catch (const std::exception& exc) {

@@ -16,6 +16,7 @@ set(INGESTD_LIB_SOURCES
     src/domain_matcher.cpp
     src/id.cpp
     src/json_util.cpp
+    src/mail_queue.cpp
     src/sha256.cpp
     src/sqlite_db.cpp
     src/storage_path.cpp
@@ -40,6 +41,7 @@ add_executable(ingestd_tests
     tests/test_config.cpp
     tests/test_domain_cache.cpp
     tests/test_domain_matcher.cpp
+    tests/test_mail_queue.cpp
     tests/test_sqlite_db.cpp
     tests/test_storage_utils.cpp
 )
