@@ -8,7 +8,6 @@ from typing import Any
 
 from app.db.connection import connect_database
 from app.ingest.storage import utc_now
-from app.services.verification_code import extract_verification_code
 
 
 SAFE_INLINE_CONTENT_TYPES = {
@@ -328,6 +327,36 @@ class MessageService:
         items = [self._prepare_public_mailbox_item(item, surface=surface) for item in mailbox["items"]]
         return {**mailbox, "items": items}
 
+    async def get_public_mailbox_verification_codes(
+        self,
+        mailbox_address: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        request_ip: str | None = None,
+    ) -> dict[str, Any]:
+        canonical_mailbox_address = await self._require_public_surface_enabled(mailbox_address, "api")
+        return await self._runtime.list_mailbox_verification_codes(
+            canonical_mailbox_address,
+            limit=limit,
+            offset=offset,
+            request_ip=request_ip,
+        )
+
+    async def get_public_delivery_verification_code(
+        self,
+        mailbox_address: str,
+        delivery_id: str,
+        *,
+        request_ip: str | None = None,
+    ) -> dict[str, Any]:
+        canonical_mailbox_address = await self._require_public_surface_enabled(mailbox_address, "api")
+        return await self._runtime.get_delivery_verification_code(
+            canonical_mailbox_address,
+            delivery_id,
+            request_ip=request_ip,
+        )
+
     async def get_public_delivery_detail(
         self,
         mailbox_address: str,
@@ -529,29 +558,8 @@ class MessageService:
     def _prepare_public_mailbox_item(self, item: dict[str, Any], *, surface: str) -> dict[str, Any]:
         payload = dict(item)
         if surface == "web":
-            payload["verification_code"] = self._extract_verification_code(payload)
+            payload["verification_code"] = payload.get("verification_code")
         payload.pop("text_preview", None)
         payload.pop("text_body_path", None)
         payload.pop("html_body_path", None)
         return payload
-
-    def _extract_verification_code(self, item: dict[str, Any]) -> str | None:
-        if item.get("parse_status") != "parsed":
-            return None
-        text_body = self._safe_read_storage_text(item.get("text_body_path"))
-        html_body = self._safe_read_storage_text(item.get("html_body_path"))
-        return extract_verification_code(
-            subject=str(item.get("subject") or ""),
-            sender=str(item.get("from_addr") or ""),
-            preview=str(item.get("text_preview") or ""),
-            text_body=text_body,
-            html_body=html_body,
-        )
-
-    def _safe_read_storage_text(self, storage_path: Any) -> str:
-        if not storage_path:
-            return ""
-        try:
-            return self._runtime.storage.read_text(str(storage_path)) or ""
-        except (OSError, ValueError):
-            return ""

@@ -1402,6 +1402,7 @@ class RapidInboxRuntime:
                     m.id AS message_id,
                     m.subject,
                     m.from_addr,
+                    m.verification_code,
                     m.text_preview,
                     m.text_body_path,
                     m.html_body_path,
@@ -1464,6 +1465,7 @@ class RapidInboxRuntime:
                     m.id AS message_id,
                     m.subject,
                     m.from_addr,
+                    m.verification_code,
                     m.text_preview,
                     m.text_body_path,
                     m.html_body_path,
@@ -1494,6 +1496,7 @@ class RapidInboxRuntime:
                     m.id AS message_id,
                     m.subject,
                     m.from_addr,
+                    m.verification_code,
                     m.text_body_path,
                     m.html_body_path,
                     m.parse_status,
@@ -1531,12 +1534,61 @@ class RapidInboxRuntime:
             "received_at": row["delivered_at"],
             "subject": row["subject"],
             "from_addr": row["from_addr"],
+            "verification_code": row["verification_code"],
             "parse_status": row["parse_status"],
             "text_body": self.storage.read_text(row["text_body_path"]) or "",
             "html_body": self.storage.read_text(row["html_body_path"]) or "",
             "raw_path": row["raw_path"],
             "headers": json.loads(row["headers_json"] or "[]"),
             "attachments": [dict(attachment) for attachment in attachments],
+        }
+
+    async def list_mailbox_verification_codes(
+        self,
+        mailbox_address: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        request_ip: str | None = None,
+    ) -> dict[str, Any]:
+        mailbox = await self.get_mailbox_view(
+            mailbox_address,
+            limit=limit,
+            offset=offset,
+            request_ip=request_ip,
+        )
+        items = [
+            {
+                "delivery_id": item["delivery_id"],
+                "message_id": item["message_id"],
+                "received_at": item["delivered_at"],
+                "subject": item.get("subject"),
+                "from_addr": item.get("from_addr"),
+                "parse_status": item.get("parse_status"),
+                "verification_code": item.get("verification_code"),
+            }
+            for item in mailbox["items"]
+        ]
+        return {**mailbox, "items": items}
+
+    async def get_delivery_verification_code(
+        self,
+        mailbox_address: str,
+        delivery_id: str,
+        *,
+        request_ip: str | None = None,
+    ) -> dict[str, Any]:
+        item = await self.get_mailbox_delivery_item(
+            mailbox_address,
+            delivery_id,
+            request_ip=request_ip,
+        )
+        return {
+            "delivery_id": item["delivery_id"],
+            "message_id": item["message_id"],
+            "received_at": item["delivered_at"],
+            "parse_status": item["parse_status"],
+            "verification_code": item.get("verification_code"),
         }
 
     async def _authorize_public_mailbox_access(

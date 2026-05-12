@@ -463,6 +463,75 @@ async def test_public_mailbox_page_extracts_chatgpt_login_code_from_css_heavy_op
 
 
 @pytest.mark.asyncio
+async def test_public_api_lists_mailbox_verification_codes(app_client, runtime) -> None:
+    await runtime.create_domain("adb.com")
+    public_key = await runtime.api_keys.create_key(
+        name="public-code-list",
+        kind="public",
+        scopes=["public.read"],
+        domain_ids=[],
+        mailbox_patterns=["foo@adb.com"],
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="noreply@openai.com",
+        content=_rich_mail_bytes(
+            subject="Your OpenAI verification code",
+            message_id="code-list@example.com",
+            from_addr="OpenAI <noreply@openai.com>",
+            body="Your verification code is 654321.",
+        ),
+    )
+    await runtime.drain_parser_queue()
+
+    response = await app_client.get(
+        "/api/v1/public/mailboxes/foo@adb.com/verification-codes",
+        headers={"X-API-Key": public_key["plain_text"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mailbox"] == "foo@adb.com"
+    assert payload["items"][0]["verification_code"] == "654321"
+    assert payload["items"][0]["received_at"]
+
+
+@pytest.mark.asyncio
+async def test_public_api_gets_single_message_verification_code(app_client, runtime) -> None:
+    await runtime.create_domain("adb.com")
+    public_key = await runtime.api_keys.create_key(
+        name="public-code-detail",
+        kind="public",
+        scopes=["public.read"],
+        domain_ids=[],
+        mailbox_patterns=["foo@adb.com"],
+    )
+    await runtime.accept_message(
+        rcpt_tos=["foo@adb.com"],
+        envelope_from="noreply@openai.com",
+        content=_rich_mail_bytes(
+            subject="Your OpenAI verification code",
+            message_id="code-detail@example.com",
+            from_addr="OpenAI <noreply@openai.com>",
+            body="Your verification code is 482951.",
+        ),
+    )
+    await runtime.drain_parser_queue()
+    mailbox = await runtime.get_mailbox_view("foo@adb.com")
+    delivery_id = mailbox["items"][0]["delivery_id"]
+
+    response = await app_client.get(
+        f"/api/v1/public/mailboxes/foo@adb.com/messages/{delivery_id}/verification-code",
+        headers={"X-API-Key": public_key["plain_text"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["delivery_id"] == delivery_id
+    assert payload["verification_code"] == "482951"
+
+
+@pytest.mark.asyncio
 async def test_public_mailbox_page_includes_websocket_bootstrap_on_first_page(app_client, runtime) -> None:
     await runtime.create_domain("adb.com")
     await runtime.accept_message(

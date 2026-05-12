@@ -97,6 +97,30 @@ async def list_mailbox_messages(
         set_active_permission_context(None)
 
 
+@router.get("/api/v1/public/mailboxes/{mailbox_address}/verification-codes")
+async def list_mailbox_verification_codes(
+    mailbox_address: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    api_key: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+) -> dict:
+    require_public_api_key(request, x_api_key, api_key)
+    request_ip = request.client.host if request.client is not None else None
+    try:
+        return await _message_service(request).get_public_mailbox_verification_codes(
+            mailbox_address,
+            limit=limit,
+            offset=offset,
+            request_ip=request_ip,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    finally:
+        set_active_permission_context(None)
+
+
 @router.get("/api/v1/public/mailboxes/{mailbox_address}/messages/{delivery_id}")
 async def get_mailbox_message(
     mailbox_address: str,
@@ -112,6 +136,28 @@ async def get_mailbox_message(
             mailbox_address,
             delivery_id,
             surface="api",
+            request_ip=request_ip,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    finally:
+        set_active_permission_context(None)
+
+
+@router.get("/api/v1/public/mailboxes/{mailbox_address}/messages/{delivery_id}/verification-code")
+async def get_mailbox_message_verification_code(
+    mailbox_address: str,
+    delivery_id: str,
+    request: Request,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    api_key: str | None = Query(default=None),
+) -> dict:
+    require_public_api_key(request, x_api_key, api_key)
+    request_ip = request.client.host if request.client is not None else None
+    try:
+        return await _message_service(request).get_public_delivery_verification_code(
+            mailbox_address,
+            delivery_id,
             request_ip=request_ip,
         )
     except LookupError as exc:
