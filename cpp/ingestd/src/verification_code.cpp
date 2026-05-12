@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -221,20 +222,27 @@ std::string decode_basic_html_entities(std::string value) {
         const bool hex = index + 4 < value.size() && (value[index + 2] == 'x' || value[index + 2] == 'X');
         std::size_t cursor = index + (hex ? 3 : 2);
         int codepoint = 0;
+        bool valid_entity = true;
         bool has_digit = false;
+        const int base = hex ? 16 : 10;
         while (cursor < value.size() && value[cursor] != ';') {
             const int digit = hex ? hex_value(static_cast<unsigned char>(value[cursor]))
                                   : (ascii_digit(static_cast<unsigned char>(value[cursor]))
                                          ? value[cursor] - '0'
                                          : -1);
             if (digit < 0) {
+                valid_entity = false;
+                break;
+            }
+            if (codepoint > (std::numeric_limits<int>::max() - digit) / base) {
+                valid_entity = false;
                 break;
             }
             has_digit = true;
-            codepoint = codepoint * (hex ? 16 : 10) + digit;
+            codepoint = codepoint * base + digit;
             ++cursor;
         }
-        if (has_digit && cursor < value.size() && value[cursor] == ';') {
+        if (valid_entity && has_digit && cursor < value.size() && value[cursor] == ';') {
             append_utf8(decoded, codepoint);
             index = cursor + 1;
             continue;
@@ -484,13 +492,6 @@ std::string strip_irrelevant_tokens(std::string text) {
         if (length >= 9) {
             blank_range(text, start, index);
             continue;
-        }
-        if (length == 4) {
-            int year = 0;
-            if (parse_four_digit_year(std::string_view(text).substr(start, length), year) &&
-                year >= 1900 && year <= 2099) {
-                blank_range(text, start, index);
-            }
         }
     }
 

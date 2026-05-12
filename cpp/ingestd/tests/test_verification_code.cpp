@@ -24,6 +24,11 @@ void test_verification_code_extracts_plain_six_digit_code() {
     const auto code = extract("Your verification code", "noreply@example.com",
                               "Your verification code is 482913. It expires in 10 minutes.");
     test::check(code.has_value() && *code == "482913", "plain six digit code");
+
+    const auto year_shaped_code =
+        extract("Your PIN", "security@example.com", "Your security code is 2024.");
+    test::check(year_shaped_code.has_value() && *year_shaped_code == "2024",
+                "year-shaped four digit code");
 }
 
 void test_verification_code_extracts_chinese_code() {
@@ -72,6 +77,7 @@ void test_verification_code_ignores_ambiguous_two_codes() {
 void test_verification_code_extracts_numeric_html_entities() {
     const auto code = extract("Verify your email", "noreply@example.com", "",
                               "<p>Your verification code is "
+                              "&#99999999999999999999999999999999999999999999999999999999999; "
                               "<strong>&#52;&#56;&#50;&#57;&#53;&#49;</strong></p>");
     test::check(code.has_value() && *code == "482951", "numeric html entities decoded");
 }
