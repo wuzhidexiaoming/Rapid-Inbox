@@ -186,7 +186,7 @@ async def test_admin_pages_redirect_unauthenticated_users_to_login(app_client) -
     assert response.headers["location"] == "/admin/login"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "SAMEORIGIN"
-    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["referrer-policy"] == "same-origin"
 
 
 @pytest.mark.asyncio
