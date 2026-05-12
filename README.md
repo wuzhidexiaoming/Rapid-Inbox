@@ -116,6 +116,23 @@ http://127.0.0.1:8000/admin/login
 
 </details>
 
+<details>
+<summary><b>C++ SMTP ingestd + Python HTTP</b>（高吞吐生产模式）</summary>
+
+```bash
+# 1. 启动 Python HTTP，不启用内嵌 SMTP
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# 2. 启动 C++ SMTP 收件入口
+cmake -S cpp/ingestd -B cpp/ingestd/build
+cmake --build cpp/ingestd/build
+SMTP_HOST=0.0.0.0 SMTP_PORT=25 cpp/ingestd/build/rapid-inbox-ingestd --base-dir .
+```
+
+C++ ingestd 的 `250 queued` 表示邮件已进入内存队列；正常停止会 drain，异常崩溃或断电可能丢失尚未落盘的内存队列邮件。
+
+</details>
+
 ## 配置
 
 启动器读取变量的优先级：

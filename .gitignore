@@ -4,6 +4,7 @@
 .codex/
 .vscode/
 .worktrees/
+cpp/ingestd/build*/
 storage/
 __pycache__/
 *.pyc
