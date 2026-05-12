@@ -41,7 +41,13 @@ rapid_inbox::ingestd::MailJob sample_job() {
     job.message_id = "msg_1";
     job.envelope_from = "sender@example.com";
     job.received_at = "2026-05-12T03:04:05Z";
-    job.raw_content = "Subject: Hello\r\n\r\nBody";
+    job.raw_content =
+        "From: Sender <sender@example.com>\r\n"
+        "To: code@adb.com\r\n"
+        "Subject: Hello\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        "Your verification code is 123456.\r\n";
     job.raw_sha256 = "digest";
     job.raw_path = rapid_inbox::ingestd::raw_message_path(job.message_id, job.received_at);
     job.manifest_path = rapid_inbox::ingestd::manifest_path(job.message_id, job.received_at);
@@ -235,7 +241,7 @@ void test_batch_writer_ignores_preexisting_part_symlinks() {
                 "manifest written correctly");
 }
 
-void test_batch_writer_writes_sqlite_pending_records() {
+void test_batch_writer_writes_sqlite_parsed_records() {
     const fs::path root = fs::temp_directory_path() / "rapid-inbox-writer-sqlite";
     fs::remove_all(root);
     fs::create_directories(root);
@@ -257,18 +263,46 @@ void test_batch_writer_writes_sqlite_pending_records() {
     writer.write_batch({job});
 
     rapid_inbox::ingestd::SqliteDb db(db_path, 5000);
-    auto message =
-        db.prepare("SELECT parse_status, raw_path, envelope_from FROM messages WHERE id = 'msg_1'");
+    auto message = db.prepare(
+        "SELECT parse_status, raw_path, envelope_from, subject, text_preview, "
+        "text_body_path, html_body_path, verification_code "
+        "FROM messages WHERE id = 'msg_1'");
     test::check(message.step_row(), "message row exists");
     test::check(std::string(reinterpret_cast<const char*>(sqlite3_column_text(message.get(), 0))) ==
-                    "pending",
-                "message pending");
+                    "parsed",
+                "message parsed");
     test::check(std::string(reinterpret_cast<const char*>(sqlite3_column_text(message.get(), 1))) ==
                     job.raw_path,
                 "message raw path");
     test::check(std::string(reinterpret_cast<const char*>(sqlite3_column_text(message.get(), 2))) ==
                     "sender@example.com",
                 "message envelope from");
+    test::check(std::string(reinterpret_cast<const char*>(sqlite3_column_text(message.get(), 3))) ==
+                    "Hello",
+                "message subject");
+    test::check(std::string(reinterpret_cast<const char*>(sqlite3_column_text(message.get(), 4)))
+                        .find("Your verification code is 123456") == 0,
+                "message preview");
+    const unsigned char* text_body_path_text = sqlite3_column_text(message.get(), 5);
+    test::check(text_body_path_text != nullptr, "message text body path exists");
+    const std::string text_body_path_value =
+        reinterpret_cast<const char*>(text_body_path_text);
+    test::check(sqlite3_column_type(message.get(), 6) == SQLITE_NULL, "message html path null");
+    test::check(std::string(reinterpret_cast<const char*>(sqlite3_column_text(message.get(), 7))) ==
+                    "123456",
+                "message verification code");
+    test::check(fs::exists(root / text_body_path_value), "text body file exists");
+    test::check(read_text_file(root / text_body_path_value).find("Your verification code is 123456") ==
+                    0,
+                "text body content");
+    const std::string manifest_content = read_text_file(root / job.manifest_path);
+    test::check(manifest_content.find("\"parsed\":{\"status\":\"parsed\"") != std::string::npos,
+                "manifest parsed status");
+    test::check(manifest_content.find("\"text_body_path\":\"" + text_body_path_value + "\"") !=
+                    std::string::npos,
+                "manifest text body path");
+    test::check(manifest_content.find("\"verification_code\":\"123456\"") != std::string::npos,
+                "manifest verification code");
 
     auto mailbox =
         db.prepare("SELECT message_count, address_canonical FROM mailboxes WHERE "
@@ -307,4 +341,122 @@ void test_batch_writer_writes_sqlite_pending_records() {
                              "'2026-05-12T03:04:05Z'");
     test::check(metric.step_row(), "metric bucket exists");
     test::check(sqlite3_column_int(metric.get(), 0) == 1, "metric deliveries");
+}
+
+void test_batch_writer_marks_parse_failure_without_rejecting_raw() {
+    const fs::path root = fs::temp_directory_path() / "rapid-inbox-writer-parse-failure";
+    fs::remove_all(root);
+    fs::create_directories(root);
+    const fs::path db_path = root / "app.db";
+    {
+        rapid_inbox::ingestd::SqliteDb db(db_path, 5000);
+        const fs::path schema_path = fs::path(RAPID_INBOX_REPO_ROOT) / "sqlite_schema.sql";
+        std::ifstream schema(schema_path);
+        std::string sql((std::istreambuf_iterator<char>(schema)),
+                        std::istreambuf_iterator<char>());
+        db.exec(sql);
+        db.exec("INSERT INTO domains (id, root_domain_ascii, root_domain_unicode, created_at, "
+                "updated_at) VALUES (1, 'adb.com', 'adb.com', '2026-05-12T03:04:05Z', "
+                "'2026-05-12T03:04:05Z')");
+    }
+
+    rapid_inbox::ingestd::BatchWriter writer(root, db_path, 5000, false);
+    rapid_inbox::ingestd::MailJob job = sample_job();
+    job.raw_content =
+        "Subject: Broken\r\n"
+        "Content-Type: multipart/mixed; boundary=\"missing\"\r\n"
+        "\r\n"
+        "body without boundary\r\n";
+    writer.write_batch({job});
+
+    rapid_inbox::ingestd::SqliteDb db(db_path, 5000);
+    auto message = db.prepare(
+        "SELECT parse_status, parse_error, text_body_path, verification_code "
+        "FROM messages WHERE id = 'msg_1'");
+    test::check(message.step_row(), "failed message row exists");
+    test::check(std::string(reinterpret_cast<const char*>(sqlite3_column_text(message.get(), 0))) ==
+                    "failed",
+                "message failed");
+    test::check(sqlite3_column_text(message.get(), 1) != nullptr, "message parse error");
+    test::check(sqlite3_column_type(message.get(), 2) == SQLITE_NULL, "failed text path null");
+    test::check(sqlite3_column_type(message.get(), 3) == SQLITE_NULL,
+                "failed verification code null");
+    test::check(fs::exists(root / job.raw_path), "failed raw file exists");
+    test::check(fs::exists(root / job.manifest_path), "failed manifest file exists");
+    const std::string manifest_content = read_text_file(root / job.manifest_path);
+    test::check(manifest_content.find("\"parsed\":{\"status\":\"failed\"") != std::string::npos,
+                "failed manifest parsed status");
+    test::check(manifest_content.find("\"parse_error\":\"invalid multipart boundary\"") !=
+                    std::string::npos,
+                "failed manifest parse error");
+}
+
+void test_batch_writer_writes_parsed_attachment_records() {
+    const fs::path root = fs::temp_directory_path() / "rapid-inbox-writer-attachments";
+    fs::remove_all(root);
+    fs::create_directories(root);
+    const fs::path db_path = root / "app.db";
+    {
+        rapid_inbox::ingestd::SqliteDb db(db_path, 5000);
+        const fs::path schema_path = fs::path(RAPID_INBOX_REPO_ROOT) / "sqlite_schema.sql";
+        std::ifstream schema(schema_path);
+        std::string sql((std::istreambuf_iterator<char>(schema)),
+                        std::istreambuf_iterator<char>());
+        db.exec(sql);
+        db.exec("INSERT INTO domains (id, root_domain_ascii, root_domain_unicode, created_at, "
+                "updated_at) VALUES (1, 'adb.com', 'adb.com', '2026-05-12T03:04:05Z', "
+                "'2026-05-12T03:04:05Z')");
+    }
+
+    rapid_inbox::ingestd::BatchWriter writer(root, db_path, 5000, false);
+    rapid_inbox::ingestd::MailJob job = sample_job();
+    job.raw_content =
+        "From: Sender <sender@example.com>\r\n"
+        "To: code@adb.com\r\n"
+        "Subject: Attachment\r\n"
+        "MIME-Version: 1.0\r\n"
+        "Content-Type: multipart/mixed; boundary=\"mixed-boundary\"\r\n"
+        "\r\n"
+        "--mixed-boundary\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        "Body.\r\n"
+        "--mixed-boundary\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "Content-Disposition: attachment; filename=\"report.txt\"\r\n"
+        "Content-Transfer-Encoding: base64\r\n"
+        "\r\n"
+        "UXVhcnRlcmx5IHJlcG9ydAo=\r\n"
+        "--mixed-boundary--\r\n";
+    writer.write_batch({job});
+
+    rapid_inbox::ingestd::SqliteDb db(db_path, 5000);
+    auto message =
+        db.prepare("SELECT has_attachments, attachment_count FROM messages WHERE id = 'msg_1'");
+    test::check(message.step_row(), "attachment message row exists");
+    test::check(sqlite3_column_int(message.get(), 0) == 1, "message has attachments");
+    test::check(sqlite3_column_int(message.get(), 1) == 1, "message attachment count");
+
+    auto attachment = db.prepare(
+        "SELECT filename, safe_filename, content_type, storage_path, size_bytes "
+        "FROM attachments WHERE message_id = 'msg_1'");
+    test::check(attachment.step_row(), "attachment row exists");
+    test::check(
+        std::string(reinterpret_cast<const char*>(sqlite3_column_text(attachment.get(), 0))) ==
+            "report.txt",
+        "attachment filename");
+    test::check(
+        std::string(reinterpret_cast<const char*>(sqlite3_column_text(attachment.get(), 1))) ==
+            "report.txt",
+        "attachment safe filename");
+    test::check(
+        std::string(reinterpret_cast<const char*>(sqlite3_column_text(attachment.get(), 2))) ==
+            "text/plain",
+        "attachment content type");
+    const std::string storage_path =
+        reinterpret_cast<const char*>(sqlite3_column_text(attachment.get(), 3));
+    test::check(sqlite3_column_int(attachment.get(), 4) == 17, "attachment size");
+    test::check(fs::exists(root / storage_path), "attachment file exists");
+    test::check(read_text_file(root / storage_path) == "Quarterly report\n",
+                "attachment file content");
 }
