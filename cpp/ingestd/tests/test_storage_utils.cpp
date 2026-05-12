@@ -111,6 +111,15 @@ void test_storage_paths_match_python_layout() {
     test::check(rapid_inbox::ingestd::manifest_path("msg_abc", received_at) ==
                     "manifests/2026/05/12/msg_abc.json",
                 "manifest path");
+    test::check(rapid_inbox::ingestd::text_body_path("msg_abc", received_at) ==
+                    "text/2026/05/12/msg_abc.txt",
+                "text body path");
+    test::check(rapid_inbox::ingestd::html_body_path("msg_abc", received_at) ==
+                    "html/2026/05/12/msg_abc.html",
+                "html body path");
+    test::check(rapid_inbox::ingestd::attachment_path("msg_abc", "att_1", "report.txt") ==
+                    "attachments/msg_abc/att_1-report.txt",
+                "attachment path");
     test::check(rapid_inbox::ingestd::safe_filename("a/b c?.txt") == "a_b_c_.txt",
                 "safe filename");
     test::check(rapid_inbox::ingestd::safe_filename("a//b") == "a_b", "collapsed safe filename");

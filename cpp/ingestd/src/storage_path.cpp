@@ -53,4 +53,18 @@ std::string manifest_path(const std::string& message_id, const std::string& rece
     return dated_path("manifests", message_id, received_at, ".json");
 }
 
+std::string text_body_path(const std::string& message_id, const std::string& received_at) {
+    return dated_path("text", message_id, received_at, ".txt");
+}
+
+std::string html_body_path(const std::string& message_id, const std::string& received_at) {
+    return dated_path("html", message_id, received_at, ".html");
+}
+
+std::string attachment_path(const std::string& message_id,
+                            const std::string& attachment_id,
+                            const std::string& safe_name) {
+    return "attachments/" + message_id + "/" + attachment_id + "-" + safe_name;
+}
+
 }
