@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <array>
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
@@ -55,29 +56,52 @@ bool send_line(int fd, const std::string& line) {
     return send_all(fd, payload.data(), payload.size());
 }
 
-bool recv_line(int fd, std::string& line) {
-    line.clear();
-    char ch = '\0';
-    for (;;) {
-        const ssize_t received = ::recv(fd, &ch, 1, 0);
-        if (received == 0) {
-            return false;
-        }
-        if (received < 0) {
-            if (errno == EINTR) {
-                continue;
+class ClientLineReader {
+public:
+    explicit ClientLineReader(int fd) : fd_(fd) {}
+
+    bool recv_line(std::string& line) {
+        line.clear();
+        for (;;) {
+            if (cursor_ == end_ && !fill()) {
+                return false;
             }
-            return false;
-        }
-        if (ch == '\n') {
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
+
+            const char ch = buffer_[cursor_++];
+            if (ch == '\n') {
+                if (!line.empty() && line.back() == '\r') {
+                    line.pop_back();
+                }
+                return true;
             }
+            line.push_back(ch);
+        }
+    }
+
+private:
+    bool fill() {
+        for (;;) {
+            const ssize_t received = ::recv(fd_, buffer_.data(), buffer_.size(), 0);
+            if (received == 0) {
+                return false;
+            }
+            if (received < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                return false;
+            }
+            cursor_ = 0;
+            end_ = static_cast<std::size_t>(received);
             return true;
         }
-        line.push_back(ch);
     }
-}
+
+    int fd_;
+    std::array<char, 4096> buffer_{};
+    std::size_t cursor_ = 0;
+    std::size_t end_ = 0;
+};
 
 int create_listen_socket(const std::string& host, int port) {
     if (port < 0 || port > 65535) {
@@ -229,8 +253,9 @@ void SmtpServer::handle_client(int client_fd) {
         return;
     }
 
+    ClientLineReader reader(client_fd);
     std::string line;
-    while (running_ && recv_line(client_fd, line)) {
+    while (running_ && reader.recv_line(line)) {
         std::string response = session.handle_line(line);
         if (response.empty()) {
             continue;
