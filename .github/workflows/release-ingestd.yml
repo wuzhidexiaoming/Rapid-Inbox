@@ -1,0 +1,102 @@
+name: Build and release ingestd
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    name: Python tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -c constraints-dev.txt -e ".[dev]"
+
+      - name: Run Python tests
+        run: pytest -q
+
+  build-ingestd-linux-x86_64:
+    name: Build ingestd Linux x86_64
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libsqlite3-dev libssl-dev libunistring-dev libicu-dev
+
+      - name: Configure ingestd
+        run: cmake -S cpp/ingestd -B cpp/ingestd/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build ingestd
+        run: cmake --build cpp/ingestd/build --config Release --parallel
+
+      - name: Test ingestd
+        run: ctest --test-dir cpp/ingestd/build --output-on-failure
+
+      - name: Package ingestd binary
+        run: |
+          mkdir -p dist/package
+          cp cpp/ingestd/build/rapid-inbox-ingestd dist/package/rapid-inbox-ingestd
+          chmod 755 dist/package/rapid-inbox-ingestd
+          cat > dist/package/README.txt <<'EOF'
+          rapid-inbox-ingestd Linux x86_64 binary.
+
+          Extract this archive and run:
+            ./rapid-inbox-ingestd --base-dir /path/to/Rapid-Inbox
+
+          This binary is built by GitHub Actions on ubuntu-24.04.
+          EOF
+          tar -C dist/package -czf dist/rapid-inbox-ingestd-linux-x86_64.tar.gz rapid-inbox-ingestd README.txt
+          sha256sum dist/rapid-inbox-ingestd-linux-x86_64.tar.gz > dist/rapid-inbox-ingestd-linux-x86_64.tar.gz.sha256
+
+      - name: Upload ingestd artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapid-inbox-ingestd-linux-x86_64
+          path: |
+            dist/rapid-inbox-ingestd-linux-x86_64.tar.gz
+            dist/rapid-inbox-ingestd-linux-x86_64.tar.gz.sha256
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release assets
+    runs-on: ubuntu-24.04
+    needs:
+      - python-tests
+      - build-ingestd-linux-x86_64
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download packaged ingestd assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true

@@ -11,19 +11,31 @@ SMTP_HOST="${SMTP_HOST:-0.0.0.0}"
 SMTP_PORT="${SMTP_PORT:-25}"
 INSTALL_EXTRAS="${INSTALL_EXTRAS:-1}"
 USE_CPP_INGESTD="${USE_CPP_INGESTD:-1}"
+BUILD_LOCAL_INGESTD="${BUILD_LOCAL_INGESTD:-0}"
+INGESTD_RELEASE_REPO="${INGESTD_RELEASE_REPO:-wendaochangsheng/Rapid-Inbox}"
+INGESTD_VERSION="${INGESTD_VERSION:-latest}"
+INGESTD_BINARY_URL="${INGESTD_BINARY_URL:-}"
+INGESTD_BIN_DIR="${INGESTD_BIN_DIR:-$RUN_DIR/bin}"
+INGESTD_BIN="$INGESTD_BIN_DIR/rapid-inbox-ingestd"
 
 usage() {
     cat <<'EOF'
-Usage: bash quickstart.sh [--python-smtp] [--http-port PORT] [--smtp-port PORT] [--no-install]
+Usage: bash quickstart.sh [--python-smtp] [--build-local] [--binary-url URL] [--ingestd-version VERSION] [--http-port PORT] [--smtp-port PORT] [--no-install]
 
 Starts Rapid Inbox with a one-command newbie flow.
 
 Default mode:
   - Python HTTP bound to 0.0.0.0:8000
   - C++ rapid-inbox-ingestd bound to 0.0.0.0:25
+  - Downloads a prebuilt ingestd binary from GitHub Releases when available
 
 Fallback mode:
   - Pass --python-smtp to use the Python SMTP runner instead of C++ ingestd
+  - Pass --build-local to compile ingestd on this machine instead of downloading
+
+Release options:
+  --binary-url URL          Download ingestd from an explicit .tar.gz URL
+  --ingestd-version VALUE   Release tag to download, or "latest" (default)
 
 Open:
   - Admin login: http://127.0.0.1:8000/admin/login
@@ -97,6 +109,100 @@ build_cpp_ingestd() {
     require_cmd c++
     cmake -S "$ROOT_DIR/cpp/ingestd" -B "$ROOT_DIR/cpp/ingestd/build"
     cmake --build "$ROOT_DIR/cpp/ingestd/build"
+    INGESTD_BIN="$ROOT_DIR/cpp/ingestd/build/rapid-inbox-ingestd"
+}
+
+ingestd_asset_name() {
+    local os
+    local arch
+    os="$(uname -s)"
+    arch="$(uname -m)"
+    case "$os:$arch" in
+        Linux:x86_64|Linux:amd64)
+            printf 'rapid-inbox-ingestd-linux-x86_64.tar.gz'
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+ingestd_download_url() {
+    local asset_name
+    if [ -n "$INGESTD_BINARY_URL" ]; then
+        printf '%s\n' "$INGESTD_BINARY_URL"
+        return 0
+    fi
+    asset_name="$(ingestd_asset_name)" || return 1
+    if [ "$INGESTD_VERSION" = "latest" ]; then
+        printf '%s\n' "https://github.com/${INGESTD_RELEASE_REPO}/releases/latest/download/${asset_name}"
+    else
+        printf '%s\n' "https://github.com/${INGESTD_RELEASE_REPO}/releases/download/${INGESTD_VERSION}/${asset_name}"
+    fi
+}
+
+download_cpp_ingestd() {
+    local url
+    url="$(ingestd_download_url)" || return 1
+    mkdir -p "$INGESTD_BIN_DIR"
+    printf 'Downloading prebuilt ingestd: %s\n' "$url"
+    "$PYTHON_BIN" - "$url" "$INGESTD_BIN_DIR" <<'PY'
+import os
+import stat
+import sys
+import tarfile
+import tempfile
+import urllib.request
+from pathlib import Path
+
+url = sys.argv[1]
+target_dir = Path(sys.argv[2])
+target = target_dir / "rapid-inbox-ingestd"
+
+request = urllib.request.Request(url, headers={"User-Agent": "Rapid-Inbox quickstart"})
+token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+if token:
+    request.add_header("Authorization", f"Bearer {token}")
+
+with tempfile.TemporaryDirectory(prefix="rapid-inbox-ingestd-") as tmp:
+    archive_path = Path(tmp) / "ingestd.tar.gz"
+    with urllib.request.urlopen(request, timeout=30) as response:
+        archive_path.write_bytes(response.read())
+
+    with tarfile.open(archive_path, "r:gz") as archive:
+        member = next(
+            (
+                item
+                for item in archive.getmembers()
+                if item.isfile() and Path(item.name).name == "rapid-inbox-ingestd"
+            ),
+            None,
+        )
+        if member is None:
+            raise SystemExit("archive does not contain rapid-inbox-ingestd")
+        extracted = archive.extractfile(member)
+        if extracted is None:
+            raise SystemExit("failed to extract rapid-inbox-ingestd")
+        tmp_bin = Path(tmp) / "rapid-inbox-ingestd"
+        tmp_bin.write_bytes(extracted.read())
+        tmp_bin.chmod(tmp_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        os.replace(tmp_bin, target)
+
+target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+PY
+}
+
+prepare_cpp_ingestd() {
+    if [ "$BUILD_LOCAL_INGESTD" -eq 1 ]; then
+        build_cpp_ingestd
+        return
+    fi
+    if download_cpp_ingestd; then
+        return
+    fi
+    printf 'quickstart: prebuilt ingestd download failed; falling back to local build.\n' >&2
+    build_cpp_ingestd
 }
 
 wait_for_tcp() {
@@ -166,6 +272,19 @@ while [ $# -gt 0 ]; do
         --python-smtp)
             USE_CPP_INGESTD=0
             ;;
+        --build-local)
+            BUILD_LOCAL_INGESTD=1
+            ;;
+        --binary-url)
+            shift
+            [ $# -gt 0 ] || die "--binary-url needs a value"
+            INGESTD_BINARY_URL="$1"
+            ;;
+        --ingestd-version)
+            shift
+            [ $# -gt 0 ] || die "--ingestd-version needs a value"
+            INGESTD_VERSION="$1"
+            ;;
         --http-port)
             shift
             [ $# -gt 0 ] || die "--http-port needs a value"
@@ -219,13 +338,13 @@ mkdir -p "$RUN_DIR"
 install_python_deps
 
 if [ "$USE_CPP_INGESTD" -eq 1 ]; then
-    build_cpp_ingestd
+    prepare_cpp_ingestd
 fi
 
 if [ "$USE_CPP_INGESTD" -eq 1 ]; then
     "$VENV_DIR/bin/uvicorn" app.main:app --host "$HTTP_HOST" --port "$HTTP_PORT" > "$RUN_DIR/http.log" 2>&1 &
     HTTP_PID=$!
-    "$ROOT_DIR/cpp/ingestd/build/rapid-inbox-ingestd" --base-dir "$ROOT_DIR" > "$RUN_DIR/ingestd.log" 2>&1 &
+    "$INGESTD_BIN" --base-dir "$ROOT_DIR" > "$RUN_DIR/ingestd.log" 2>&1 &
     INGESTD_PID=$!
 else
     "$VENV_DIR/bin/rapid-inbox-http" > "$RUN_DIR/http.log" 2>&1 &

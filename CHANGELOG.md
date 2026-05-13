@@ -11,6 +11,8 @@
 - 邮件自动保留与过期清理能力。
 - C++ `rapid-inbox-ingestd` 高吞吐 SMTP 收件入口，保留 Python HTTP 后台与公开页面，并写入现有 SQLite/storage 数据契约。
 - `quickstart.sh` 一键快速开始脚本，自动准备 Python 环境、构建 C++ ingestd 并启动本地服务。
+- GitHub Actions ingestd 发版流程：push/PR 自动构建测试，`v*` tag 自动发布 Linux x86_64 预编译二进制。
+- SMTP 验证码压测脚本，可批量投递验证码邮件并采样 C++ ingestd / Python HTTP 的 CPU 与内存。
 
 ### 变更
 
@@ -20,6 +22,7 @@
 - 完善 API 密钥编辑、授权范围和状态管理。
 - 增强清空邮件数据后的文件清理和 SQLite 压缩流程。
 - 整理 README、贡献指南、安全策略和 GitHub 协作模板。
+- `quickstart.sh` 默认优先下载 GitHub Release 预编译 ingestd，下载失败或指定 `--build-local` 时回退到本地编译。
 
 ### 修复
 

@@ -38,3 +38,15 @@ def test_quickstart_script_has_help_output() -> None:
     assert "Admin login" in result.stdout
     assert "0.0.0.0:8000" in result.stdout
     assert "0.0.0.0:25" in result.stdout
+    assert "--build-local" in result.stdout
+    assert "--binary-url URL" in result.stdout
+    assert "prebuilt" in result.stdout
+
+
+def test_quickstart_script_downloads_prebuilt_by_default() -> None:
+    content = SCRIPT.read_text(encoding="utf-8")
+
+    assert "BUILD_LOCAL_INGESTD=\"${BUILD_LOCAL_INGESTD:-0}\"" in content
+    assert "download_cpp_ingestd" in content
+    assert "https://github.com/${INGESTD_RELEASE_REPO}/releases/latest/download/${asset_name}" in content
+    assert "--build-local)" in content
