@@ -31,6 +31,9 @@ def test_smtp_stress_script_has_help_output() -> None:
     assert "--count" in result.stdout
     assert "--concurrency" in result.stdout
     assert "--json-output" in result.stdout
+    assert "用法:" in result.stdout
+    assert "选项:" in result.stdout
+    assert "显示帮助信息并退出" in result.stdout
 
 
 def test_build_verification_message_contains_unique_code_and_run_id() -> None:
@@ -77,3 +80,51 @@ def test_summarize_process_samples_reports_peak_and_average() -> None:
     assert summary["ingestd"]["cpu_percent_peak"] == 150.0
     assert summary["ingestd"]["rss_bytes_peak"] == 3000
     assert summary["http"]["samples"] == 1
+
+
+def test_print_summary_uses_chinese_labels(capsys) -> None:
+    module = _load_script_module()
+
+    module.print_summary(
+        {
+            "run_id": "ri-stress-20260513",
+            "recipient": "code@adb.com",
+            "send": {
+                "attempted": 2,
+                "succeeded": 2,
+                "failed": 0,
+                "elapsed_seconds": 1.25,
+                "throughput_per_second": 1.6,
+                "latency_ms_avg": 12.5,
+                "latency_ms_p50": 12.0,
+                "latency_ms_p95": 15.0,
+                "latency_ms_p99": 15.0,
+                "first_errors": [],
+            },
+            "database": {
+                "messages": 2,
+                "parsed": 2,
+                "with_verification_code": 2,
+                "first_received_at": "2026-05-13T04:11:53Z",
+                "last_received_at": "2026-05-13T04:11:54Z",
+            },
+            "processes": {
+                "ingestd": {
+                    "pid": 10,
+                    "samples": 2,
+                    "cpu_percent_avg": 100.0,
+                    "cpu_percent_peak": 150.0,
+                    "rss_bytes_peak": 3000,
+                }
+            },
+        }
+    )
+
+    text = capsys.readouterr().out
+    assert "压测结果" in text
+    assert "运行ID" in text
+    assert "收件人" in text
+    assert "投递" in text
+    assert "延迟" in text
+    assert "数据库" in text
+    assert "进程采样" in text

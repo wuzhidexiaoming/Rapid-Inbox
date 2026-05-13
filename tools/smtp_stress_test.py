@@ -29,6 +29,19 @@ DEFAULT_PROCESS_PATTERNS = {
 }
 
 
+class ChineseArgumentParser(argparse.ArgumentParser):
+    def format_help(self) -> str:
+        return (
+            super()
+            .format_help()
+            .replace("usage:", "用法:")
+            .replace("options:", "选项:")
+        )
+
+    def format_usage(self) -> str:
+        return super().format_usage().replace("usage:", "用法:")
+
+
 class SmtpError(RuntimeError):
     pass
 
@@ -104,13 +117,13 @@ async def read_smtp_response(reader: asyncio.StreamReader) -> tuple[int, str]:
     while True:
         raw = await reader.readline()
         if not raw:
-            raise SmtpError("SMTP connection closed")
+            raise SmtpError("SMTP 连接已关闭")
         line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
         lines.append(line)
         if len(line) >= 4 and line[:3].isdigit() and line[3] != "-":
             return int(line[:3]), "\n".join(lines)
         if len(line) < 4:
-            raise SmtpError(f"invalid SMTP response: {line!r}")
+            raise SmtpError(f"无效 SMTP 响应: {line!r}")
 
 
 async def expect_smtp(
@@ -120,7 +133,7 @@ async def expect_smtp(
 ) -> tuple[int, str]:
     code, text = await read_smtp_response(reader)
     if code not in expected:
-        raise SmtpError(f"{context}: expected {sorted(expected)}, got {code}: {text}")
+        raise SmtpError(f"{context}: 期望 {sorted(expected)}，实际 {code}: {text}")
     return code, text
 
 
@@ -238,7 +251,7 @@ async def smtp_worker(
             results.append(SendResult(ok=True, latency_ms=elapsed_ms))
         except Exception as exc:
             elapsed_ms = (time.perf_counter() - started) * 1000
-            results.append(SendResult(ok=False, latency_ms=elapsed_ms, error=f"worker {worker_id}: {exc}"))
+            results.append(SendResult(ok=False, latency_ms=elapsed_ms, error=f"工作线程 {worker_id}: {exc}"))
             await close_smtp_session(writer)
             reader = None
             writer = None
@@ -391,7 +404,7 @@ def load_default_recipient(local_part: str) -> str:
             """
         ).fetchone()
     if row is None:
-        raise RuntimeError("No active exact-match domain found. Pass --to explicitly.")
+        raise RuntimeError("数据库里没有可接收的启用域名，请使用 --to 指定收件地址。")
     return f"{local_part}@{row['root_domain_ascii']}"
 
 
@@ -453,43 +466,45 @@ def parse_args() -> argparse.Namespace:
     default_host = normalize_connect_host(settings.smtp_host)
     run_id = utc_run_id()
 
-    parser = argparse.ArgumentParser(
-        description="Run a high-concurrency Rapid Inbox SMTP verification-code delivery stress test.",
+    parser = ChineseArgumentParser(
+        description="运行 Rapid Inbox SMTP 验证码邮件并发压测，并采样 CPU/内存。",
+        add_help=False,
     )
-    parser.add_argument("--host", default=default_host, help=f"SMTP host, default {default_host}")
-    parser.add_argument("--port", type=int, default=settings.smtp_port, help=f"SMTP port, default {settings.smtp_port}")
-    parser.add_argument("--to", help="Recipient address. If omitted, the first active exact-match domain is used.")
-    parser.add_argument("--local-part", default=f"stress-{run_id}", help="Local part when --to is omitted.")
-    parser.add_argument("--sender", default="stress@example.test", help="Envelope/header sender address.")
-    parser.add_argument("--count", type=int, default=5000, help="Total messages to send.")
-    parser.add_argument("--concurrency", type=int, default=100, help="Concurrent SMTP sessions.")
-    parser.add_argument("--timeout", type=float, default=10.0, help="Per SMTP operation timeout in seconds.")
-    parser.add_argument("--sample-interval", type=float, default=0.5, help="Process CPU/RSS sample interval in seconds.")
-    parser.add_argument("--wait-db-timeout", type=float, default=30.0, help="Seconds to wait for DB parsed rows.")
-    parser.add_argument("--no-db-check", action="store_true", help="Skip SQLite result polling after SMTP send.")
-    parser.add_argument("--json-output", type=Path, help="Write full result JSON to this path.")
+    parser.add_argument("-h", "--help", action="help", help="显示帮助信息并退出。")
+    parser.add_argument("--host", default=default_host, help=f"SMTP 主机，默认 {default_host}")
+    parser.add_argument("--port", type=int, default=settings.smtp_port, help=f"SMTP 端口，默认 {settings.smtp_port}")
+    parser.add_argument("--to", help="收件地址；不填时自动选择数据库中第一个启用域名。")
+    parser.add_argument("--local-part", default=f"stress-{run_id}", help="不传 --to 时使用的邮箱本地部分。")
+    parser.add_argument("--sender", default="stress@example.test", help="发件地址。")
+    parser.add_argument("--count", type=int, default=5000, help="投递邮件总数。")
+    parser.add_argument("--concurrency", type=int, default=100, help="并发 SMTP 会话数。")
+    parser.add_argument("--timeout", type=float, default=10.0, help="每个 SMTP 操作的超时时间，单位秒。")
+    parser.add_argument("--sample-interval", type=float, default=0.5, help="进程 CPU/内存采样间隔，单位秒。")
+    parser.add_argument("--wait-db-timeout", type=float, default=30.0, help="投递后等待数据库完成解析的时间，单位秒。")
+    parser.add_argument("--no-db-check", action="store_true", help="投递完成后不检查 SQLite 入库/解析结果。")
+    parser.add_argument("--json-output", type=Path, help="将完整结果 JSON 写入指定路径。")
     parser.add_argument(
         "--process",
         action="append",
         default=[],
-        help="Process sampler override/addition as label:cmd-substring. Can be repeated.",
+        help="进程采样匹配规则，格式为 label:命令片段，可重复传入。",
     )
-    parser.add_argument("--run-id", default=run_id, help="Run id embedded in Message-ID headers.")
-    parser.add_argument("--quiet", action="store_true", help="Only print the final summary.")
+    parser.add_argument("--run-id", default=run_id, help="写入 Message-ID 的压测运行 ID。")
+    parser.add_argument("--quiet", action="store_true", help="只输出最终结果。")
     return parser.parse_args()
 
 
 def validate_args(args: argparse.Namespace) -> None:
     if args.count < 1:
-        raise SystemExit("--count must be >= 1")
+        raise SystemExit("--count 必须大于等于 1")
     if args.concurrency < 1:
-        raise SystemExit("--concurrency must be >= 1")
+        raise SystemExit("--concurrency 必须大于等于 1")
     if args.timeout <= 0:
-        raise SystemExit("--timeout must be > 0")
+        raise SystemExit("--timeout 必须大于 0")
     if args.sample_interval <= 0:
-        raise SystemExit("--sample-interval must be > 0")
+        raise SystemExit("--sample-interval 必须大于 0")
     if args.wait_db_timeout < 0:
-        raise SystemExit("--wait-db-timeout must be >= 0")
+        raise SystemExit("--wait-db-timeout 必须大于等于 0")
 
 
 async def run_stress(args: argparse.Namespace) -> dict[str, Any]:
@@ -511,10 +526,10 @@ async def run_stress(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     if not args.quiet:
-        print(f"Run id: {args.run_id}")
-        print(f"Target: {args.host}:{args.port}")
-        print(f"Recipient: {recipient}")
-        print(f"Messages: {args.count}, concurrency: {args.concurrency}")
+        print(f"运行ID: {args.run_id}")
+        print(f"目标: {args.host}:{args.port}")
+        print(f"收件人: {recipient}")
+        print(f"邮件数量: {args.count}，并发: {args.concurrency}")
 
     started = time.perf_counter()
     workers = [
@@ -569,47 +584,47 @@ def format_bytes(value: int) -> str:
 
 def print_summary(result: dict[str, Any]) -> None:
     send = result["send"]
-    print("\nSMTP stress summary")
-    print(f"Run id: {result['run_id']}")
-    print(f"Recipient: {result['recipient']}")
+    print("\nSMTP 压测结果")
+    print(f"运行ID: {result['run_id']}")
+    print(f"收件人: {result['recipient']}")
     print(
-        "Send: "
-        f"{send['succeeded']}/{send['attempted']} ok, "
-        f"{send['failed']} failed, "
-        f"{send['elapsed_seconds']}s, "
-        f"{send['throughput_per_second']} mail/s"
+        "投递: "
+        f"{send['succeeded']}/{send['attempted']} 成功，"
+        f"{send['failed']} 失败，"
+        f"耗时 {send['elapsed_seconds']} 秒，"
+        f"吞吐 {send['throughput_per_second']} 封/秒"
     )
     print(
-        "Latency: "
-        f"avg {send['latency_ms_avg']} ms, "
-        f"p50 {send['latency_ms_p50']} ms, "
-        f"p95 {send['latency_ms_p95']} ms, "
-        f"p99 {send['latency_ms_p99']} ms"
+        "延迟: "
+        f"平均 {send['latency_ms_avg']} ms，"
+        f"P50 {send['latency_ms_p50']} ms，"
+        f"P95 {send['latency_ms_p95']} ms，"
+        f"P99 {send['latency_ms_p99']} ms"
     )
     if send["first_errors"]:
-        print("First errors:")
+        print("前几个错误:")
         for error in send["first_errors"]:
             print(f"  - {error}")
 
     if result["database"] is not None:
         db = result["database"]
         print(
-            "Database: "
-            f"{db['messages']} rows, "
-            f"{db['parsed']} parsed, "
-            f"{db['with_verification_code']} codes"
+            "数据库: "
+            f"{db['messages']} 条消息，"
+            f"{db['parsed']} 条已解析，"
+            f"{db['with_verification_code']} 条提取到验证码"
         )
 
     if result["processes"]:
-        print("Process samples:")
+        print("进程采样:")
         for label, summary in result["processes"].items():
             print(
                 f"  {label} pid={summary['pid']} "
-                f"cpu avg/peak={summary['cpu_percent_avg']}%/{summary['cpu_percent_peak']}% "
-                f"rss peak={format_bytes(summary['rss_bytes_peak'])}"
+                f"CPU 平均/峰值={summary['cpu_percent_avg']}%/{summary['cpu_percent_peak']}% "
+                f"内存峰值={format_bytes(summary['rss_bytes_peak'])}"
             )
     else:
-        print("Process samples: none matched")
+        print("进程采样: 没有匹配到进程")
 
 
 def main() -> int:
@@ -619,7 +634,7 @@ def main() -> int:
     if args.json_output:
         args.json_output.parent.mkdir(parents=True, exist_ok=True)
         args.json_output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"JSON written: {args.json_output}")
+        print(f"JSON 已写入: {args.json_output}")
     return 0 if result["send"]["failed"] == 0 else 1
 
 
