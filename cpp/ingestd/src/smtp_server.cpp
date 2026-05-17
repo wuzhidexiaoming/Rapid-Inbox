@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <array>
@@ -54,6 +55,16 @@ bool send_all(int fd, const char* data, std::size_t size) {
 bool send_line(int fd, const std::string& line) {
     const std::string payload = line + "\r\n";
     return send_all(fd, payload.data(), payload.size());
+}
+
+bool set_receive_timeout(int fd, int timeout_seconds) {
+    if (timeout_seconds <= 0) {
+        return true;
+    }
+    timeval timeout{};
+    timeout.tv_sec = timeout_seconds;
+    timeout.tv_usec = 0;
+    return ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0;
 }
 
 class ClientLineReader {
@@ -155,16 +166,22 @@ SmtpServer::SmtpServer(std::string host,
                        DomainCache& domains,
                        MailQueue& queue,
                        int max_recipients,
-                       int max_message_size_bytes)
+                       int max_message_size_bytes,
+                       int idle_timeout_seconds)
     : host_(std::move(host)),
       port_(port),
       domains_(domains),
       queue_(queue),
       max_recipients_(max_recipients),
-      max_message_size_bytes_(max_message_size_bytes) {
+      max_message_size_bytes_(max_message_size_bytes),
+      idle_timeout_seconds_(idle_timeout_seconds) {
     if (max_message_size_bytes_ < 0) {
         throw std::runtime_error("invalid MAX_MESSAGE_SIZE_BYTES: " +
                                  std::to_string(max_message_size_bytes_));
+    }
+    if (idle_timeout_seconds_ < 0) {
+        throw std::runtime_error("invalid SMTP_IDLE_TIMEOUT_SECONDS: " +
+                                 std::to_string(idle_timeout_seconds_));
     }
 }
 
@@ -203,13 +220,10 @@ void SmtpServer::stop() {
         accept_thread_.join();
     }
 
-    shutdown_active_clients();
-    for (std::thread& thread : client_threads_) {
-        if (thread.joinable()) {
-            thread.join();
-        }
+    {
+        std::unique_lock lock(client_fds_mutex_);
+        client_fds_cv_.wait(lock, [this] { return active_client_fds_.empty(); });
     }
-    client_threads_.clear();
 }
 
 void SmtpServer::accept_loop() {
@@ -233,7 +247,8 @@ void SmtpServer::accept_loop() {
 
         try {
             register_client_fd(client_fd);
-            client_threads_.emplace_back([this, client_fd] { handle_client(client_fd); });
+            std::thread client_thread([this, client_fd] { handle_client(client_fd); });
+            client_thread.detach();
         } catch (...) {
             close_client_fd(client_fd);
         }
@@ -241,6 +256,11 @@ void SmtpServer::accept_loop() {
 }
 
 void SmtpServer::handle_client(int client_fd) {
+    if (!set_receive_timeout(client_fd, idle_timeout_seconds_)) {
+        close_client_fd(client_fd);
+        return;
+    }
+
     auto domain_rules = domains_.snapshot_rules();
     SmtpSession session(domain_rules.matcher,
                         queue_,
@@ -290,6 +310,7 @@ void SmtpServer::close_client_fd(int client_fd) {
     }
     (void)::shutdown(client_fd, SHUT_RDWR);
     close_fd(client_fd);
+    client_fds_cv_.notify_all();
 }
 
 }  // namespace rapid_inbox::ingestd

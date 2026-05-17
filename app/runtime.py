@@ -2230,7 +2230,15 @@ class RapidInboxRuntime:
             ).fetchone()
             if existing is not None:
                 return
-            self._insert_mailbox(connection, match, utc_now(), message_count=0, latest_message_at=None)
+            try:
+                self._insert_mailbox(connection, match, utc_now(), message_count=0, latest_message_at=None)
+            except sqlite3.IntegrityError:
+                existing = connection.execute(
+                    "SELECT id FROM mailboxes WHERE address_canonical = ?",
+                    (match.address_canonical,),
+                ).fetchone()
+                if existing is None:
+                    raise
 
         await self.writer.execute(operation)
 

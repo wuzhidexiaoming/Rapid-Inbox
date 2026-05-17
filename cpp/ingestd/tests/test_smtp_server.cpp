@@ -136,6 +136,44 @@ std::string recv_line_with_timeout(int fd, std::chrono::milliseconds timeout) {
     }
 }
 
+void recv_eof_with_timeout(int fd, std::chrono::milliseconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+
+    for (;;) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            throw std::runtime_error("recv eof timed out");
+        }
+
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+        pollfd poll_fd{.fd = fd, .events = POLLIN, .revents = 0};
+        const int ready = ::poll(&poll_fd, 1, static_cast<int>(remaining.count()));
+        if (ready < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            throw socket_error("poll");
+        }
+        if (ready == 0) {
+            throw std::runtime_error("recv eof timed out");
+        }
+
+        char ch = '\0';
+        const ssize_t received = ::recv(fd, &ch, 1, 0);
+        if (received == 0) {
+            return;
+        }
+        if (received < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            throw socket_error("recv");
+        }
+        throw std::runtime_error("received data while waiting for eof");
+    }
+}
+
 }  // namespace
 
 void test_smtp_server_stop_wakes_idle_client() {
@@ -143,7 +181,7 @@ void test_smtp_server_stop_wakes_idle_client() {
     rapid_inbox::ingestd::MailQueue queue(10);
     const int port = reserve_loopback_port();
     rapid_inbox::ingestd::SmtpServer server(
-        "127.0.0.1", port, domains, queue, 20, 1024 * 1024);
+        "127.0.0.1", port, domains, queue, 20, 1024 * 1024, 30);
 
     server.start();
     int client_fd = -1;
@@ -166,6 +204,33 @@ void test_smtp_server_stop_wakes_idle_client() {
         stop_future.get();
         close_fd(client_fd);
         client_fd = -1;
+    } catch (...) {
+        if (client_fd >= 0) {
+            (void)::shutdown(client_fd, SHUT_RDWR);
+            close_fd(client_fd);
+        }
+        server.stop();
+        throw;
+    }
+}
+
+void test_smtp_server_idle_client_times_out() {
+    rapid_inbox::ingestd::DomainCache domains("/tmp/rapid-inbox-smtp-server-timeout.sqlite", 5000);
+    rapid_inbox::ingestd::MailQueue queue(10);
+    const int port = reserve_loopback_port();
+    rapid_inbox::ingestd::SmtpServer server("127.0.0.1", port, domains, queue, 20, 1024 * 1024, 1);
+
+    server.start();
+    int client_fd = -1;
+    try {
+        client_fd = connect_loopback(port);
+        const std::string greeting = recv_line_with_timeout(client_fd, 1s);
+        test::check(greeting == "220 rapid-inbox-ingestd", "smtp server timeout greeting");
+
+        recv_eof_with_timeout(client_fd, 3s);
+        close_fd(client_fd);
+        client_fd = -1;
+        server.stop();
     } catch (...) {
         if (client_fd >= 0) {
             (void)::shutdown(client_fd, SHUT_RDWR);

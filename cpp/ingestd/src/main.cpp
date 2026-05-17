@@ -56,7 +56,8 @@ int main(int argc, char** argv) {
                                                 app.domains(),
                                                 app.queue(),
                                                 config.max_recipients_per_message,
-                                                config.max_message_size_bytes);
+                                                config.max_message_size_bytes,
+                                                config.smtp_idle_timeout_seconds);
         server.start();
         std::cout << "rapid-inbox-ingestd listening on " << config.smtp_host << ":"
                   << config.smtp_port << "\n";
