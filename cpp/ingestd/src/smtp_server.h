@@ -4,11 +4,11 @@
 #include "mail_queue.h"
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_set>
-#include <vector>
 
 namespace rapid_inbox::ingestd {
 
@@ -19,7 +19,8 @@ public:
                DomainCache& domains,
                MailQueue& queue,
                int max_recipients,
-               int max_message_size_bytes);
+               int max_message_size_bytes,
+               int idle_timeout_seconds);
     ~SmtpServer();
 
     void start();
@@ -38,11 +39,12 @@ private:
     MailQueue& queue_;
     int max_recipients_;
     int max_message_size_bytes_;
+    int idle_timeout_seconds_;
     std::atomic<bool> running_{false};
     int listen_fd_ = -1;
     std::thread accept_thread_;
-    std::vector<std::thread> client_threads_;
     std::mutex client_fds_mutex_;
+    std::condition_variable client_fds_cv_;
     std::unordered_set<int> active_client_fds_;
 };
 

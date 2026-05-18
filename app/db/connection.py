@@ -1,17 +1,28 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "sqlite_schema.sql"
 
 
-def connect_database(database_path: Path) -> sqlite3.Connection:
+@contextmanager
+def connect_database(database_path: Path) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(database_path, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     apply_pragmas(connection)
-    return connection
+    try:
+        yield connection
+    except BaseException:
+        connection.rollback()
+        raise
+    else:
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def apply_pragmas(connection: sqlite3.Connection) -> None:

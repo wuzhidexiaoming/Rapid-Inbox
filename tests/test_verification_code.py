@@ -213,6 +213,65 @@ def test_extract_spanish_verification_code() -> None:
     ) == "482913"
 
 
+def test_extract_openai_chinese_subject_code() -> None:
+    assert _extract(
+        subject="你的 OpenAI 代码为 752915",
+        sender="noreply@tm.openai.com",
+        text_body="",
+    ) == "752915"
+
+
+def test_extract_openai_french_subject_code() -> None:
+    assert _extract(
+        subject="Votre code OpenAI : 668266",
+        sender="noreply@tm.openai.com",
+        text_body="",
+    ) == "668266"
+
+
+def test_extract_openai_portuguese_subject_code() -> None:
+    assert _extract(
+        subject="Seu código do OpenAI é 317401",
+        sender="noreply@tm.openai.com",
+        text_body="",
+    ) == "317401"
+
+
+def test_extract_openai_german_subject_code() -> None:
+    assert _extract(
+        subject="Dein Code für OpenAI: 639584",
+        sender="noreply@tm.openai.com",
+        text_body="",
+    ) == "639584"
+
+
+@pytest.mark.parametrize(
+    ("subject", "body_hint", "expected"),
+    [
+        ("OpenAI の一時的な認証コード", "この一時検証コードを入力してください。", "284691"),
+        ("OpenAI 임시 인증 코드", "이 임시 인증 코드를 입력하세요.", "391742"),
+        ("Seu código de verificação temporário do OpenAI", "Use este código de verificação temporário.", "640218"),
+        ("Code de vérification temporaire pour OpenAI", "Utilisez ce code de vérification temporaire.", "730519"),
+        ("Dein temporärer Bestätigungscode für OpenAI", "Gib diesen Bestätigungscode ein.", "583104"),
+    ],
+)
+def test_extract_openai_localized_html_codes(subject: str, body_hint: str, expected: str) -> None:
+    assert _extract(
+        subject=subject,
+        sender="noreply@tm.openai.com",
+        html_body=f"<html><body><p>{body_hint}</p><p><strong>{expected}</strong></p></body></html>",
+    ) == expected
+
+
+def test_extract_ignores_dirty_preview_when_html_body_exists() -> None:
+    assert _extract(
+        subject="Seu código de verificação temporário do OpenAI",
+        sender="otp@tm1.openai.com",
+        html_body="<html><body><p>Use este código de verificação temporário.</p><p><strong>050328</strong></p></body></html>",
+        preview="Seu código de verificação temporário do OpenAI @font-face { font-weight: 400; color:#000000; padding: 56px 0 32px 0; }",
+    ) == "050328"
+
+
 # ---------------------------------------------------------------------------
 # False-positive guards: must NOT extract
 # ---------------------------------------------------------------------------

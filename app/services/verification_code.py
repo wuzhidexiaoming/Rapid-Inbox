@@ -56,7 +56,10 @@ def extract_verification_code(
     html_plain = _normalize_whitespace(_html_to_text(html_body or ""))
     preview_text = _normalize_whitespace(preview or "")
 
-    context_text = "\n".join(part for part in (subject_text, preview_text, plain_text, html_plain) if part)
+    context_parts = [part for part in (subject_text, plain_text, html_plain) if part]
+    if not plain_text and not html_plain and preview_text:
+        context_parts.append(preview_text)
+    context_text = "\n".join(context_parts)
     if not context_text:
         return None
     if not _looks_like_verification_message(sender_text, subject_text, context_text):
@@ -145,6 +148,12 @@ _HINTS_CORE = (
     "确认码",
     "确认代码",
     "操作确认码",
+    "验证代码",
+    "代码为",
+    "您的代码",
+    "你的代码",
+    "openai 代码",
+    "代码",
     "登录码",
     "登入码",
     "登录验证码",
@@ -211,17 +220,39 @@ _HINTS_CORE = (
     # Japanese
     "認証コード",
     "確認コード",
+    "検証コード",
+    "一時検証コード",
+    "一時的な認証コード",
     "ワンタイム",
+    "コード",
     # Korean
     "인증 코드",
     "인증코드",
     "확인 코드",
+    "임시 인증 코드",
+    "코드는",
+    "코드",
     # Other common romance/germanic variants
     "código de verificación",
     "codigo de verificacion",
+    "código de verificação",
+    "codigo de verificacao",
     "code de vérification",
+    "code de verification",
+    "votre code",
+    "seu código",
+    "seu codigo",
+    "código do openai",
+    "codigo do openai",
+    "dein code",
+    "code für openai",
+    "code fur openai",
+    "code openai",
+    "your openai code",
     "bestätigungscode",
+    "bestaetigungscode",
     "codice di verifica",
+    "codice verifica",
 )
 
 
@@ -358,7 +389,38 @@ def _looks_like_verification_message(sender: str, subject: str, text: str) -> bo
     )
     subject_strong = any(
         keyword in lowered_subject
-        for keyword in ("code", "otp", "verify", "verification", "confirm", "sign in", "sign-in", "signin", "登录", "验证", "确认")
+        for keyword in (
+            "code",
+            "otp",
+            "verify",
+            "verification",
+            "confirm",
+            "sign in",
+            "sign-in",
+            "signin",
+            "登录",
+            "验证",
+            "确认",
+            "代码",
+            "验证码",
+            "コード",
+            "認証",
+            "認証コード",
+            "検証",
+            "検証コード",
+            "確認コード",
+            "인증",
+            "인증 코드",
+            "코드",
+            "código",
+            "codigo",
+            "vérification",
+            "verificação",
+            "bestätigung",
+            "bestätigungscode",
+            "codice",
+            "verifica",
+        )
     )
     if subject_strong and any(token in lowered_sender for token in sender_hints):
         return True

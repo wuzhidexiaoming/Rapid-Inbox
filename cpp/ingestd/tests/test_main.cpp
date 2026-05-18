@@ -71,6 +71,7 @@ void test_smtp_session_rejects_data_arguments();
 void test_smtp_session_discards_oversized_data_until_terminator();
 void test_smtp_session_reports_queue_full();
 void test_smtp_server_stop_wakes_idle_client();
+void test_smtp_server_idle_client_times_out();
 void test_batch_writer_writes_raw_and_manifest();
 void test_batch_writer_writes_private_storage_permissions();
 void test_batch_writer_manifest_includes_domain_policy_snapshot();
@@ -142,6 +143,7 @@ int main() {
         test_smtp_session_discards_oversized_data_until_terminator();
         test_smtp_session_reports_queue_full();
         test_smtp_server_stop_wakes_idle_client();
+        test_smtp_server_idle_client_times_out();
         test_batch_writer_writes_raw_and_manifest();
         test_batch_writer_writes_private_storage_permissions();
         test_batch_writer_manifest_includes_domain_policy_snapshot();

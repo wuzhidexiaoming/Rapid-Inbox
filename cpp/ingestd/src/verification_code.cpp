@@ -177,7 +177,21 @@ bool contains_any(std::string_view haystack, const std::vector<std::string_view>
 const std::vector<std::string_view>& hints() {
     static const std::vector<std::string_view> values = {
         "验证码",          "确认码",       "登录码",       "安全码",
-        "动态密码",        "授权码",       "verification code",
+        "动态密码",        "授权码",       "验证代码",     "代码为",
+        "您的代码",        "你的代码",     "openai 代码",  "代码",
+        "認証コード",      "確認コード",   "検証コード",   "一時検証コード",
+        "一時的な認証コード",              "コード",
+        "인증 코드",       "인증코드",     "확인 코드",    "임시 인증 코드",
+        "코드는",          "코드",
+        "código de verificación",           "codigo de verificacion",
+        "código de verificação",            "codigo de verificacao",
+        "code de vérification",             "code de verification",
+        "votre code",      "seu código",   "seu codigo",   "código do openai",
+        "codigo do openai",                 "dein code",    "code für openai",
+        "code fur openai", "code openai",   "your openai code",
+        "bestätigungscode",                 "bestaetigungscode",
+        "codice di verifica",               "codice verifica",
+        "verification code",
         "verify code",     "security code", "login code",   "sign-in code",
         "sign in code",    "signin code",   "one-time code", "one time code",
         "otp",             "passcode",      "pass code",    "confirmation code",
@@ -512,7 +526,10 @@ bool looks_like_verification_message(const std::string& sender,
     };
     static const std::vector<std::string_view> subject_hints = {
         "code", "otp", "verify", "verification", "confirm", "sign in", "sign-in",
-        "signin", "登录", "验证", "确认",
+        "signin", "登录", "验证", "确认", "代码", "验证码", "コード", "認証",
+        "認証コード", "検証", "検証コード", "確認コード", "인증", "인증 코드",
+        "코드", "código", "codigo", "vérification", "verificação", "bestätigung",
+        "bestätigungscode", "codice", "verifica",
     };
     return contains_any(lowered_subject, subject_hints) && contains_any(lowered_sender, sender_hints);
 }
@@ -782,13 +799,19 @@ std::optional<std::string> extract_verification_code(const std::string& subject,
     const std::string html_plain = normalize_body_text(html_to_text(html_body));
 
     std::string context_text;
-    for (const std::string* part : {&subject_text, &preview_text, &plain_text, &html_plain}) {
+    for (const std::string* part : {&subject_text, &plain_text, &html_plain}) {
         if (!part->empty()) {
             if (!context_text.empty()) {
                 context_text.push_back('\n');
             }
             context_text += *part;
         }
+    }
+    if (plain_text.empty() && html_plain.empty() && !preview_text.empty()) {
+        if (!context_text.empty()) {
+            context_text.push_back('\n');
+        }
+        context_text += preview_text;
     }
 
     if (context_text.empty() ||

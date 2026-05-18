@@ -60,6 +60,47 @@ void test_verification_code_extracts_html_openai_code() {
     test::check(code.has_value() && *code == "482951", "html openai code");
 }
 
+void test_verification_code_extracts_openai_localized_codes() {
+    const auto zh_subject = extract("你的 OpenAI 代码为 752915", "noreply@tm.openai.com", "");
+    test::check(zh_subject.has_value() && *zh_subject == "752915", "openai chinese subject code");
+
+    const auto ja_html = extract(
+        "OpenAI の一時的な認証コード", "noreply@tm.openai.com", "",
+        "<html><body><p>この一時検証コードを入力してください。</p><p><strong>284691</strong></p></body></html>");
+    test::check(ja_html.has_value() && *ja_html == "284691", "openai japanese html code");
+
+    const auto ko_html = extract(
+        "OpenAI 임시 인증 코드", "otp@tm1.openai.com", "",
+        "<html><body><p>이 임시 인증 코드를 입력하세요.</p><p><strong>391742</strong></p></body></html>");
+    test::check(ko_html.has_value() && *ko_html == "391742", "openai korean html code");
+
+    const auto pt_html = extract(
+        "Seu código de verificação temporário do OpenAI", "noreply@tm.openai.com", "",
+        "<html><body><p>Use este código de verificação temporário.</p><p><strong>640218</strong></p></body></html>");
+    test::check(pt_html.has_value() && *pt_html == "640218", "openai portuguese html code");
+
+    const auto pt_dirty_preview = extract(
+        "Seu código de verificação temporário do OpenAI", "otp@tm1.openai.com", "",
+        "<html><body><p>Use este código de verificação temporário.</p><p><strong>050328</strong></p></body></html>",
+        "Seu código de verificação temporário do OpenAI @font-face { font-weight: 400; color:#000000; padding: 56px 0 32px 0; }");
+    test::check(pt_dirty_preview.has_value() && *pt_dirty_preview == "050328",
+                "openai portuguese html code with dirty preview");
+
+    const auto de_html = extract(
+        "Dein temporärer Bestätigungscode für OpenAI", "noreply@tm.openai.com", "",
+        "<html><body><p>Gib diesen Bestätigungscode ein.</p><p><strong>583104</strong></p></body></html>");
+    test::check(de_html.has_value() && *de_html == "583104", "openai german html code");
+
+    const auto fr_subject = extract("Votre code OpenAI : 668266", "noreply@tm.openai.com", "");
+    test::check(fr_subject.has_value() && *fr_subject == "668266", "openai french subject code");
+
+    const auto pt_subject = extract("Seu código do OpenAI é 317401", "noreply@tm.openai.com", "");
+    test::check(pt_subject.has_value() && *pt_subject == "317401", "openai portuguese subject code");
+
+    const auto de_subject = extract("Dein Code für OpenAI: 639584", "noreply@tm.openai.com", "");
+    test::check(de_subject.has_value() && *de_subject == "639584", "openai german subject code");
+}
+
 void test_verification_code_ignores_order_number() {
     const auto code =
         extract("Order update", "orders@shop.example.com",
