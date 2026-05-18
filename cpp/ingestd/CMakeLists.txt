@@ -7,8 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(SQLite3 REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(ICU REQUIRED COMPONENTS uc)
 find_library(UNISTRING_LIBRARY NAMES unistring libunistring.so.2 REQUIRED)
-find_library(ICUUC_LIBRARY NAMES icuuc libicuuc.so.72 REQUIRED)
 
 set(INGESTD_LIB_SOURCES
     src/batch_writer.cpp
@@ -36,7 +36,7 @@ set(INGESTD_SOURCES
 add_library(ingestd_core STATIC ${INGESTD_LIB_SOURCES})
 target_include_directories(ingestd_core PUBLIC src)
 target_compile_options(ingestd_core PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(ingestd_core PUBLIC SQLite::SQLite3 OpenSSL::Crypto ${UNISTRING_LIBRARY} ${ICUUC_LIBRARY})
+target_link_libraries(ingestd_core PUBLIC SQLite::SQLite3 OpenSSL::Crypto ${UNISTRING_LIBRARY} ICU::uc)
 
 add_executable(rapid-inbox-ingestd ${INGESTD_SOURCES})
 target_compile_options(rapid-inbox-ingestd PRIVATE -Wall -Wextra -Wpedantic)

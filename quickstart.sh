@@ -5,10 +5,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
 RUN_DIR="${RUN_DIR:-$ROOT_DIR/.rapid-inbox-run}"
-HTTP_HOST="${HTTP_HOST:-0.0.0.0}"
-HTTP_PORT="${HTTP_PORT:-8000}"
-SMTP_HOST="${SMTP_HOST:-0.0.0.0}"
-SMTP_PORT="${SMTP_PORT:-25}"
+HTTP_HOST="${HTTP_HOST:-${HOST:-}}"
+HTTP_PORT="${HTTP_PORT:-${PORT:-}}"
+SMTP_HOST="${SMTP_HOST:-}"
+SMTP_PORT="${SMTP_PORT:-}"
 INSTALL_EXTRAS="${INSTALL_EXTRAS:-1}"
 USE_CPP_INGESTD="${USE_CPP_INGESTD:-1}"
 BUILD_LOCAL_INGESTD="${BUILD_LOCAL_INGESTD:-0}"
@@ -84,6 +84,21 @@ for raw_line in dotenv.read_text(encoding="utf-8").splitlines():
     raise SystemExit(0)
 raise SystemExit(1)
 PY
+}
+
+resolve_dotenv_value() {
+    local variable_name="$1"
+    local dotenv_key="$2"
+    local default_value="$3"
+    local value="${!variable_name:-}"
+
+    if [ -z "$value" ]; then
+        value="$(dotenv_value "$dotenv_key" || true)"
+    fi
+    if [ -z "$value" ]; then
+        value="$default_value"
+    fi
+    printf -v "$variable_name" '%s' "$value"
 }
 
 ensure_venv() {
@@ -325,6 +340,11 @@ fi
 if [ -z "${BOOTSTRAP_ADMIN_PASSWORD:-}" ]; then
     BOOTSTRAP_ADMIN_PASSWORD="$(dotenv_value BOOTSTRAP_ADMIN_PASSWORD || true)"
 fi
+
+resolve_dotenv_value HTTP_HOST HOST "0.0.0.0"
+resolve_dotenv_value HTTP_PORT PORT "8000"
+resolve_dotenv_value SMTP_HOST SMTP_HOST "0.0.0.0"
+resolve_dotenv_value SMTP_PORT SMTP_PORT "25"
 
 export HOST="$HTTP_HOST"
 export PORT="$HTTP_PORT"
